@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  database:
+    name: PostgreSQL contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Prepare isolated CI configuration
+        run: cp .env.example .env
+      - name: Validate Compose chains
+        run: |
+          docker compose --env-file .env -f docker-compose.yml config --quiet
+          docker compose --env-file .env \
+            -f docker-compose.yml \
+            -f infra/compose.apps.yml \
+            -f infra/compose.dev.yml \
+            config --quiet
+          docker compose --env-file .env \
+            -f docker-compose.yml \
+            -f infra/compose.apps.yml \
+            -f infra/compose.tls.yml \
+            config --quiet
+      - name: Start PostgreSQL and Redis
+        run: |
+          docker compose --env-file .env -f docker-compose.yml \
+            up --build --detach --wait --wait-timeout 180 postgres redis
+      - name: Run SQL contracts
+        run: |
+          docker compose --env-file .env -f docker-compose.yml \
+            exec -T postgres sh -ec \
+            'PGPASSWORD="$POSTGRES_PASSWORD" exec psql --no-psqlrc \
+            -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+            < database/tests/contracts.sql
+      - name: Collect container logs
+        if: failure()
+        run: |
+          docker compose --env-file .env -f docker-compose.yml \
+            logs --no-color --tail=300
+      - name: Remove CI stack
+        if: always()
+        run: |
+          docker compose --env-file .env -f docker-compose.yml \
+            down --volumes --remove-orphans
+
+  ingest-api:
+    name: Ingest API (Node.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/ingest-api
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/ingest-api/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+
+  worker:
+    name: Worker (C# / .NET 8)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/worker
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore Sluice.Worker.sln
+      - run: dotnet format Sluice.Worker.sln --verify-no-changes --no-restore
+      - run: dotnet build Sluice.Worker.sln --configuration Release --no-restore
+      - run: dotnet test Sluice.Worker.sln --configuration Release --no-build
+      - run: dotnet list Sluice.Worker.sln package --vulnerable --include-transitive
+
+  dashboard:
+    name: Dashboard (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/dashboard
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - run: node --test tests/*.test.mjs
+      - run: npm audit --omit=dev --audit-level=high

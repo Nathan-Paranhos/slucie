@@ -1,0 +1,55 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /apps/ingest-api
+    schedule:
+      interval: weekly
+    groups:
+      ingest-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: npm
+    directory: /apps/dashboard
+    schedule:
+      interval: weekly
+    groups:
+      dashboard-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: nuget
+    directory: /apps/worker
+    schedule:
+      interval: weekly
+    groups:
+      worker-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /apps/ingest-api
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /apps/worker
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /infra/docker
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /infra/postgres
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

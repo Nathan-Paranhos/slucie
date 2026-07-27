@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sluice.Worker", "src\Sluice.Worker\Sluice.Worker.csproj", "{7F695D88-3707-4EB9-98A5-E8F2EE8C6489}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sluice.Worker.Tests", "tests\Sluice.Worker.Tests\Sluice.Worker.Tests.csproj", "{F06258E7-B9F6-4636-8DD6-97500E8A966E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7F695D88-3707-4EB9-98A5-E8F2EE8C6489}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F695D88-3707-4EB9-98A5-E8F2EE8C6489}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F695D88-3707-4EB9-98A5-E8F2EE8C6489}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F695D88-3707-4EB9-98A5-E8F2EE8C6489}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F06258E7-B9F6-4636-8DD6-97500E8A966E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F06258E7-B9F6-4636-8DD6-97500E8A966E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F06258E7-B9F6-4636-8DD6-97500E8A966E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F06258E7-B9F6-4636-8DD6-97500E8A966E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

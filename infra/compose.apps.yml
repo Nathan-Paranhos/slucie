@@ -1,0 +1,160 @@
+services:
+  ingest-api:
+    build:
+      context: ./apps/ingest-api
+      dockerfile: Dockerfile
+    image: sluice/ingest-api:${SLUICE_IMAGE_TAG:-local}
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      HOST: 0.0.0.0
+      PORT: "8080"
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      DATABASE_URL: ${SLUICE_API_DATABASE_URL:?Set SLUICE_API_DATABASE_URL}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      DATABASE_SSL_CA_FILE: ${DATABASE_SSL_CA_FILE:-}
+      REDIS_URL: ${REDIS_URL:?Set REDIS_URL}
+      REDIS_FAILURE_POLICY: ${REDIS_FAILURE_POLICY:-closed}
+      WEBHOOK_BODY_LIMIT_BYTES: ${WEBHOOK_BODY_LIMIT_BYTES:-1048576}
+      DEFAULT_RATE_LIMIT: ${DEFAULT_RATE_LIMIT:-120}
+      DEFAULT_RATE_WINDOW_SECONDS: ${DEFAULT_RATE_WINDOW_SECONDS:-60}
+      SIGNATURE_TOLERANCE_SECONDS: ${SIGNATURE_TOLERANCE_SECONDS:-300}
+      DB_POOL_MAX: ${INGEST_DB_POOL_MAX:-20}
+      DB_STATEMENT_TIMEOUT_MS: ${INGEST_DB_STATEMENT_TIMEOUT_MS:-5000}
+      SHUTDOWN_GRACE_MS: ${INGEST_SHUTDOWN_GRACE_MS:-10000}
+      SLUICE_MASTER_KEYS: ${SLUICE_MASTER_KEYS:?Set SLUICE_MASTER_KEYS}
+      SLUICE_ACTIVE_KEY_VERSION: ${SLUICE_ACTIVE_KEY_VERSION:-1}
+      METRICS_BEARER_TOKEN: ${INGEST_METRICS_BEARER_TOKEN:-}
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_healthy
+        restart: true
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:8080/health/ready')
+          .then(response => {
+            if (!response.ok) process.exit(1);
+          })
+          .catch(() => process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - data_plane
+      - edge_plane
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    image: sluice/worker:${SLUICE_IMAGE_TAG:-local}
+    restart: unless-stopped
+    init: true
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      SLUICE_WORKER_DATABASE_URL: ${SLUICE_WORKER_DATABASE_URL:?Set SLUICE_WORKER_DATABASE_URL}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      DATABASE_SSL_CA_FILE: ${DATABASE_SSL_CA_FILE:-}
+      REDIS_URL: ${SLUICE_WORKER_REDIS_URL:-}
+      SLUICE_MASTER_KEY_VERSION: ${SLUICE_MASTER_KEY_VERSION:-1}
+      SLUICE_MASTER_KEYS: ${SLUICE_MASTER_KEYS:?Set SLUICE_MASTER_KEYS}
+      SLUICE_ACTIVE_KEY_VERSION: ${SLUICE_ACTIVE_KEY_VERSION:-1}
+      WORKER_ID: ${WORKER_ID:-sluice-worker}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-16}
+      WORKER_CLAIM_BATCH_SIZE: ${WORKER_CLAIM_BATCH_SIZE:-20}
+      WORKER_LEASE_SECONDS: ${WORKER_LEASE_SECONDS:-60}
+      WORKER_HEARTBEAT_SECONDS: ${WORKER_HEARTBEAT_SECONDS:-20}
+      WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-2000}
+      WORKER_DRAIN_SECONDS: ${WORKER_DRAIN_SECONDS:-30}
+      WORKER_DIAGNOSTICS_URL: http://0.0.0.0:8080
+      WORKER_METRICS_BEARER_TOKEN: ${WORKER_METRICS_BEARER_TOKEN:-}
+      WORKER_RECONCILIATION_ENDPOINTS_JSON: ${WORKER_RECONCILIATION_ENDPOINTS_JSON:-}
+      WORKER_NOTIFICATION_WEBHOOK_URL: ${WORKER_NOTIFICATION_WEBHOOK_URL:-}
+      WORKER_NOTIFICATION_EMAIL_URL: ${WORKER_NOTIFICATION_EMAIL_URL:-}
+      WORKER_NOTIFICATION_ALLOWED_HOSTS: ${WORKER_NOTIFICATION_ALLOWED_HOSTS:-}
+      WORKER_NOTIFICATION_TIMEOUT_MS: ${WORKER_NOTIFICATION_TIMEOUT_MS:-10000}
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          bash -ec "exec 3<>/dev/tcp/127.0.0.1/8080;
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3;
+          grep -q 'HTTP/1.1 200' <&3"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 25s
+    networks:
+      - data_plane
+      - worker_egress
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 40s
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: infra/docker/dashboard.Dockerfile
+    image: sluice/dashboard:${SLUICE_IMAGE_TAG:-local}
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      DATABASE_URL: ${SLUICE_DASHBOARD_DATABASE_URL:?Set SLUICE_DASHBOARD_DATABASE_URL}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      DATABASE_SSL_REJECT_UNAUTHORIZED: ${DATABASE_SSL_REJECT_UNAUTHORIZED:-true}
+      DATABASE_SSL_CA_FILE: ${DATABASE_SSL_CA_FILE:-}
+      DASHBOARD_DB_POOL_SIZE: ${DASHBOARD_DB_POOL_SIZE:-8}
+      DASHBOARD_TRUST_PROXY: ${DASHBOARD_TRUST_PROXY:-false}
+      SLUICE_MASTER_KEYS: ${SLUICE_MASTER_KEYS:?Set SLUICE_MASTER_KEYS}
+      SLUICE_ACTIVE_KEY_VERSION: ${SLUICE_ACTIVE_KEY_VERSION:-1}
+      SLUICE_SESSION_SECRET: ${SLUICE_SESSION_SECRET:?Set SLUICE_SESSION_SECRET}
+      SLUICE_DEMO_MODE: ${SLUICE_DEMO_MODE:-false}
+      SLUICE_DEMO_EMAIL: ${SLUICE_DEMO_EMAIL:-}
+      SLUICE_DEMO_PASSWORD: ${SLUICE_DEMO_PASSWORD:-}
+      SLUICE_COOKIE_SECURE: ${SLUICE_COOKIE_SECURE:-true}
+      WORKER_DISPLAY_CAPACITY: ${WORKER_DISPLAY_CAPACITY:-32}
+    expose:
+      - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+    networks:
+      - data_plane
+      - edge_plane
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+
+networks:
+  edge_plane:
+  worker_egress:

@@ -1,0 +1,68 @@
+# Production overlay. Combine it with both docker-compose.yml and
+# infra/compose.apps.yml so PostgreSQL and all three clients share the CA.
+services:
+  postgres:
+    entrypoint:
+      - /usr/local/bin/sluice-postgres-entrypoint
+    secrets:
+      - postgres_server_cert
+      - postgres_server_key
+      - postgres_ca_cert
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name=${POSTGRES_DB:-sluice}
+      - -c
+      - cron.use_background_workers=on
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - log_connections=on
+      - -c
+      - log_disconnections=on
+      - -c
+      - log_min_duration_statement=${POSTGRES_LOG_MIN_DURATION_MS:-1000}
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/var/lib/postgresql/tls/server.crt
+      - -c
+      - ssl_key_file=/var/lib/postgresql/tls/server.key
+      - -c
+      - ssl_ca_file=/var/lib/postgresql/tls/ca.crt
+      - -c
+      - ssl_min_protocol_version=TLSv1.3
+      - -c
+      - hba_file=/etc/postgresql/sluice-pg_hba_tls.conf
+
+  ingest-api:
+    environment:
+      DATABASE_SSL: "true"
+      DATABASE_SSL_CA_FILE: /run/secrets/postgres_ca_cert
+    secrets:
+      - postgres_ca_cert
+
+  worker:
+    environment:
+      DATABASE_SSL: "true"
+      DATABASE_SSL_CA_FILE: /run/secrets/postgres_ca_cert
+    secrets:
+      - postgres_ca_cert
+
+  dashboard:
+    environment:
+      DATABASE_SSL: "true"
+      DATABASE_SSL_REJECT_UNAUTHORIZED: "true"
+      DATABASE_SSL_CA_FILE: /run/secrets/postgres_ca_cert
+    secrets:
+      - postgres_ca_cert
+
+secrets:
+  postgres_server_cert:
+    file: ${POSTGRES_TLS_CERT_FILE:?Set POSTGRES_TLS_CERT_FILE}
+  postgres_server_key:
+    file: ${POSTGRES_TLS_KEY_FILE:?Set POSTGRES_TLS_KEY_FILE}
+  postgres_ca_cert:
+    file: ${POSTGRES_TLS_CA_FILE:?Set POSTGRES_TLS_CA_FILE}

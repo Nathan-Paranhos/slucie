@@ -1,0 +1,110 @@
+name: sluice
+
+services:
+  postgres:
+    build:
+      context: .
+      dockerfile: infra/postgres/Dockerfile
+      args:
+        POSTGRES_IMAGE: ${POSTGRES_IMAGE:-postgres:17.5-bookworm@sha256:fbcea1bd13b6a882cd6caa6b58db3ae5c102efe50ec625b3e2a5cbc50db5bfe4}
+        PG_MAJOR: "17"
+    image: sluice/postgres:17-pg-cron
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sluice}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-sluice_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256 --data-checksums"
+      SLUICE_API_DB_PASSWORD: ${SLUICE_API_DB_PASSWORD:?Set SLUICE_API_DB_PASSWORD}
+      SLUICE_WORKER_DB_PASSWORD: ${SLUICE_WORKER_DB_PASSWORD:?Set SLUICE_WORKER_DB_PASSWORD}
+      SLUICE_DASHBOARD_DB_PASSWORD: ${SLUICE_DASHBOARD_DB_PASSWORD:?Set SLUICE_DASHBOARD_DB_PASSWORD}
+      SLUICE_READONLY_DB_PASSWORD: ${SLUICE_READONLY_DB_PASSWORD:?Set SLUICE_READONLY_DB_PASSWORD}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name=${POSTGRES_DB:-sluice}
+      - -c
+      - cron.use_background_workers=on
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - log_connections=on
+      - -c
+      - log_disconnections=on
+      - -c
+      - log_min_duration_statement=${POSTGRES_LOG_MIN_DURATION_MS:-1000}
+      - -c
+      - ssl=off
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/migrations:/migrations:ro
+      - ./infra/postgres/init/00-bootstrap.sh:/docker-entrypoint-initdb.d/00-bootstrap.sh:ro
+    expose:
+      - "5432"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          PGPASSWORD="$${POSTGRES_PASSWORD}"
+          psql --no-psqlrc
+          --username "$${POSTGRES_USER}"
+          --dbname "$${POSTGRES_DB}"
+          --tuples-only --no-align
+          --command "SELECT
+          to_regprocedure('sluice.ingest_event_and_enqueue(uuid,uuid,bytea,bytea,text,bytea,bytea,integer,text,jsonb,timestamp with time zone,text,text,smallint,smallint)')
+          IS NOT NULL
+          AND to_regprocedure('sluice.admin_create_tenant(text,text,integer)')
+          IS NOT NULL
+          AND EXISTS (
+          SELECT 1 FROM pg_roles
+          WHERE rolname = 'sluice_worker' AND rolcanlogin
+          )"
+          | grep -qx t
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - data_plane
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    image: redis:7.4.2-alpine@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    command:
+      - sh
+      - -ec
+      - >-
+        exec gosu redis redis-server
+        --requirepass "$${REDIS_PASSWORD}"
+        --appendonly no
+        --save ""
+        --maxmemory "${REDIS_MAXMEMORY:-256mb}"
+        --maxmemory-policy allkeys-lru
+        --protected-mode yes
+    expose:
+      - "6379"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli --no-auth-warning ping | grep -q PONG
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    networks:
+      - data_plane
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+
+networks:
+  data_plane:
+    internal: true

@@ -1,0 +1,31 @@
+name: Proposta de melhoria
+description: Proponha uma mudança coerente com a arquitetura do Sluice.
+title: "[proposal] "
+labels: ["proposal", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema
+      description: Qual necessidade concreta não é atendida?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposta
+      description: Descreva contrato, segurança, multi-tenancy e operação.
+    validations:
+      required: true
+  - type: textarea
+    id: postgres
+    attributes:
+      label: Por que PostgreSQL/recursos existentes não bastam?
+      description: Obrigatório se a proposta introduzir fila, cache ou scheduler.
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibilidade e migração
+      description: Impacto em API, SQL, worker C# e dados existentes.
+    validations:
+      required: true

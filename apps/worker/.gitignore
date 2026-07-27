@@ -1,0 +1,6 @@
+.artifacts/
+bin/
+obj/
+**/bin/
+**/obj/
+TestResults/

@@ -1,0 +1,58 @@
+name: Relato de bug
+description: Informe um comportamento reproduzível sem incluir payload ou segredo.
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Não publique segredo, credencial, payload real nem dado pessoal.
+        Vulnerabilidades devem seguir `SECURITY.md`.
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Comportamento observado
+      description: O que ocorreu e qual era o resultado esperado?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reprodução mínima
+      description: Use IDs e payloads sintéticos.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versão/commit
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Componente
+      options:
+        - ingest-api
+        - worker C#/.NET
+        - dashboard
+        - PostgreSQL/migrations
+        - Compose/operação
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Ambiente sanitizado
+      description: SO, runtime, topologia e logs sem dados sensíveis.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Verificação
+      options:
+        - label: Removi todos os segredos e dados pessoais.
+          required: true
+        - label: Este relato não é uma vulnerabilidade confidencial.
+          required: true

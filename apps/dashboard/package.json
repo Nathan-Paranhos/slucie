@@ -1,0 +1,35 @@
+{
+  "name": "@sluice/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "oxlint --deny-warnings app components lib proxy.ts next.config.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
+    "jose": "5.10.0",
+    "lucide-react": "0.468.0",
+    "next": "16.2.12",
+    "pg": "8.13.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "@types/pg": "8.11.10",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "oxlint": "1.75.0",
+    "typescript": "5.7.2"
+  },
+  "overrides": {
+    "postcss": "8.5.23",
+    "sharp": "0.35.3"
+  }
+}

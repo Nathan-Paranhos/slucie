@@ -1,0 +1,17 @@
+.git
+.github
+.vscode
+.env
+**/.env
+**/.env.*
+!**/.env.example
+**/bin
+**/obj
+**/.next
+**/node_modules
+**/coverage
+docs
+/public
+**/.tmp
+**/.artifacts
+**/*.tsbuildinfo

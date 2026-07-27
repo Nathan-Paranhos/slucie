@@ -1,0 +1,50 @@
+# Secrets and local overrides
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.p12
+
+# JavaScript / TypeScript
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+.turbo/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# .NET
+**/bin/
+**/obj/
+TestResults/
+*.user
+*.suo
+*.nupkg
+
+# Tooling and editors
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+*.log
+
+# Containers and local data (root-local only; do not hide source folders such
+# as apps/worker/src/Sluice.Worker/Data).
+/data/
+/postgres-data/
+/redis-data/
+docker-compose.override.yml
+
+# Generated reports
+artifacts/
+reports/
