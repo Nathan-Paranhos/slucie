@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 
 export function LoginForm({
   demo,
+  oidc,
   returnTo
 }: {
   demo: boolean;
+  oidc: boolean;
   returnTo: string;
 }) {
   const router = useRouter();
@@ -49,6 +51,11 @@ export function LoginForm({
 
   return (
     <form onSubmit={submit}>
+      {oidc ? (
+        <a className="button button-primary button-block" href={`/api/session/oidc/start?returnTo=${encodeURIComponent(returnTo)}`}>
+          Entrar com SSO seguro <ArrowRight size={15} aria-hidden="true" />
+        </a>
+      ) : <>
       <div className="field">
         <label htmlFor="email">E-mail</label>
         <div className="input-wrap">
@@ -100,6 +107,7 @@ export function LoginForm({
           <strong>sluice-demo</strong>. Desative `SLUICE_DEMO_MODE` em produção.
         </p>
       )}
+      </>}
     </form>
   );
 }

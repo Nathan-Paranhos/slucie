@@ -141,9 +141,11 @@ iniciar quando seu contrato SQL está incompleto.
   `BYPASSRLS`.
 - Habilite `DATABASE_SSL=true` e mantenha
   `DATABASE_SSL_REJECT_UNAUTHORIZED=true` quando usar uma CA confiável.
-- O cookie deve permanecer `HttpOnly`, `SameSite=Lax` e `Secure`.
-- MFA completo ainda não está implementado; use VPN/identity-aware proxy ou
-  integre SSO antes de expor administração sensível.
+- O cookie de sessão permanece `HttpOnly`, `SameSite=Strict` e `Secure`.
+- Em produção, OIDC é obrigatório. Configure cliente confidencial, PKCE e um
+  `SLUICE_OIDC_REQUIRED_ACR` emitido pelo IdP somente após MFA.
+- O e-mail autenticado precisa corresponder a um usuário ativo com membership
+  ativo no banco; OIDC não provisiona nem eleva acesso automaticamente.
 
 ## TLS
 

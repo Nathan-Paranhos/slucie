@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { Brand } from "@/components/brand";
 import { isDemoMode, SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { oidcConfig } from "@/lib/oidc";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
@@ -20,6 +21,7 @@ export default async function LoginPage({
   }
 
   const demo = isDemoMode();
+  const oidc = Boolean(oidcConfig());
   const resolvedSearchParams = await searchParams;
 
   return (
@@ -64,6 +66,7 @@ export default async function LoginPage({
           </p>
           <LoginForm
             demo={demo}
+            oidc={oidc}
             returnTo={
               resolvedSearchParams.returnTo?.startsWith("/")
                 ? resolvedSearchParams.returnTo

@@ -150,6 +150,7 @@ Veja o [runbook de operação](docs/operations.md) e o
 - [Autenticação por provedor](docs/provider-authentication.md)
 - [API HTTP e contratos de entrega](docs/api.md)
 - [Operação, TLS, backup e recuperação](docs/operations.md)
+- [Checklist de liberação para produção](docs/production-readiness.md)
 - [Desenvolvimento local](docs/local-development.md)
 - [Worker C#/.NET 8](apps/worker/README.md)
 - [Changelog](CHANGELOG.md)

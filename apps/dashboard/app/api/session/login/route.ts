@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth";
 import { hasDatabase, queryOne } from "@/lib/db";
 import { isSameOrigin } from "@/lib/request-security";
+import { oidcConfig } from "@/lib/oidc";
 
 interface UserRow {
   user_id: string;
@@ -33,6 +34,9 @@ function validReturnTo(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  if (oidcConfig()) {
+    return NextResponse.json({ error: "oidc_required", message: "Use o provedor corporativo de identidade." }, { status: 403 });
+  }
   if (!isSameOrigin(request)) {
     return NextResponse.json(
       { error: "origin_not_allowed", message: "Origem não permitida." },

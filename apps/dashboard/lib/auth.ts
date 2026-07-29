@@ -74,15 +74,21 @@ export async function verifySessionToken(
 }
 
 export function isDemoMode() {
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
   if (process.env.SLUICE_DEMO_MODE !== undefined) {
     return process.env.SLUICE_DEMO_MODE === "true";
   }
-  return process.env.NODE_ENV !== "production";
+  return true;
 }
 
 export function isSecureSessionCookie() {
+  if (process.env.NODE_ENV === "production") {
+    return true;
+  }
   if (process.env.SLUICE_COOKIE_SECURE !== undefined) {
     return process.env.SLUICE_COOKIE_SECURE === "true";
   }
-  return process.env.NODE_ENV === "production";
+  return false;
 }
