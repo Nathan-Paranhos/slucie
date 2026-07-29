@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim@sha256:3c0edbfe1549dd93fb789dc96299a40df865ad7bffefcaf38e8c05940686d641 AS build
+FROM mcr.microsoft.com/dotnet/sdk:9.0-bookworm-slim@sha256:cb9d975bf57fd1b0915858d1db1184bea20f7f746f0536323fcab49673144e8c AS build
 WORKDIR /source
 
 COPY apps/worker/Sluice.Worker.sln apps/worker/
