@@ -13,9 +13,10 @@ export async function POST(request: Request) {
     value: "",
     httpOnly: true,
     secure: isSecureSessionCookie(),
-    sameSite: "lax",
+    sameSite: "strict",
     path: "/",
     maxAge: 0
   });
+  response.headers.set("Cache-Control", "no-store");
   return response;
 }

@@ -12,6 +12,8 @@ import {
   GitBranch,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   ServerCog,
   Settings,
@@ -87,6 +89,7 @@ export function ConsoleShell({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [tenantSwitching, setTenantSwitching] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
@@ -157,7 +160,7 @@ export function ConsoleShell({
     .toUpperCase();
 
   return (
-    <div className="console">
+    <div className={`console ${isCollapsed ? "console-collapsed" : ""}`}>
       {mobileOpen && (
         <button
           className="sidebar-scrim"
@@ -165,8 +168,17 @@ export function ConsoleShell({
           onClick={() => setMobileOpen(false)}
         />
       )}
-      <aside className={`sidebar ${mobileOpen ? "open" : ""}`}>
-        <Brand />
+      <aside className={`sidebar ${mobileOpen ? "open" : ""} ${isCollapsed ? "collapsed" : ""}`}>
+        <div className="sidebar-header">
+          <Brand compact={isCollapsed} showTag={!isCollapsed} />
+          <button
+            className="icon-button collapse-toggle"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            title={isCollapsed ? "Expandir menu" : "Recolher menu"}
+          >
+            {isCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+          </button>
+        </div>
         <div className="sidebar-workspace">
           <span>Workspace</span>
           <strong>
@@ -283,9 +295,9 @@ export function ConsoleShell({
             <Bell size={15} />
             <i className="notification-dot" />
           </button>
-          <button className="icon-button" title="Conta">
+          <button className="icon-button account-button" title="Conta">
             <Users size={15} />
-            <ChevronDown size={9} style={{ position: "absolute", right: 3, bottom: 3 }} />
+            <ChevronDown size={9} />
           </button>
         </header>
         {children}

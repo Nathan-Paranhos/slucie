@@ -143,6 +143,7 @@ Veja o [runbook de operação](docs/operations.md) e o
 ## Documentação
 
 - [Arquitetura e decisões](docs/architecture.md)
+- [Desenho de sistema e fluxos](docs/system-design.md)
 - [Banco, roles e contratos SQL](docs/database.md)
 - [Segurança e threat model](docs/security.md)
 - [Retenção e LGPD](docs/lgpd-retention.md)

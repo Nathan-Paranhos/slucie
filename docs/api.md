@@ -274,7 +274,7 @@ Request:
 }
 ```
 
-Sucesso grava o cookie `sluice_session` (`HttpOnly`, `SameSite=Lax`, oito
+Sucesso grava o cookie `sluice_session` (`HttpOnly`, `SameSite=Strict`, oito
 horas) e retorna:
 
 ```json

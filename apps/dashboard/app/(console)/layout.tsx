@@ -54,9 +54,8 @@ export default async function ConsoleLayout({
           tenants = active;
         }
       }
-    } catch {
-      // The current signed tenant remains available if membership listing is
-      // temporarily unavailable. Data requests still pass through RLS.
+    } catch (error) {
+      void error;
     }
   }
 

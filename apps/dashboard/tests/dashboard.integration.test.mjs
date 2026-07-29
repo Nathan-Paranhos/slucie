@@ -110,7 +110,7 @@ test("demo login, protected console, and mutations work end to end", async (t) =
   const setCookie = login.headers.get("set-cookie");
   assert.ok(setCookie?.includes("sluice_session="));
   assert.ok(setCookie?.includes("HttpOnly"));
-  assert.ok(setCookie?.includes("SameSite=lax"));
+  assert.ok(setCookie?.includes("SameSite=strict"));
   assert.ok(!setCookie?.includes("Secure"));
   const cookie = setCookie.split(";", 1)[0];
 
@@ -118,6 +118,10 @@ test("demo login, protected console, and mutations work end to end", async (t) =
     headers: { cookie }
   });
   assert.equal(dashboard.status, 200);
+  assert.equal(dashboard.headers.get("x-frame-options"), "DENY");
+  assert.equal(dashboard.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(dashboard.headers.get("cross-origin-opener-policy"), "same-origin");
+  assert.equal(dashboard.headers.get("x-permitted-cross-domain-policies"), "none");
   const snapshot = await dashboard.json();
   assert.ok(Array.isArray(snapshot.stats));
   assert.ok(snapshot.stats.length >= 4);

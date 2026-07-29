@@ -137,9 +137,9 @@ export async function POST(request: Request) {
       const resource = body.resource;
       const input = body.input ?? {};
       const name = text(input.name, 100);
-      if (name.length < 3) {
+      if (!name) {
         return NextResponse.json(
-          { message: "Nome deve conter ao menos 3 caracteres." },
+          { message: "Nome é obrigatório." },
           { status: 400 }
         );
       }
@@ -169,9 +169,9 @@ export async function POST(request: Request) {
           return NextResponse.json({ message: "Provedor inválido." }, { status: 400 });
         }
         const secret = text(input.secret, 2048);
-        if (secret.length < 16) {
+        if (!secret) {
           return NextResponse.json(
-            { message: "Segredo deve conter ao menos 16 caracteres." },
+            { message: "Segredo é obrigatório." },
             { status: 400 }
           );
         }

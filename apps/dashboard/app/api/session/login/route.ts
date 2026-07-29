@@ -138,7 +138,7 @@ export async function POST(request: Request) {
     value: token,
     httpOnly: true,
     secure: isSecureSessionCookie(),
-    sameSite: "lax",
+    sameSite: "strict",
     path: "/",
     maxAge: SESSION_DURATION_SECONDS
   });
