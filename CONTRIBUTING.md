@@ -26,8 +26,12 @@ Vulnerabilidades não devem ser publicadas em issues. Siga
 4. Execute `make up` ou o comando Compose descrito no README.
 5. Instale as dependências Node com `npm ci` em `apps/ingest-api` e
    `apps/dashboard`.
-6. Rode `make test` antes do pull request. O alvo valida Compose, contratos
-   SQL, API, dashboard e worker C#.
+6. Rode `make test` antes do pull request. O alvo valida Compose, migrations e
+   contratos SQL, API, dashboard em modo demo e worker C#.
+7. Para mudanças no dashboard conectado, banco, fontes, provedores ou fluxo de
+   entrega, suba a stack e rode também `SLUICE_CONNECTED_E2E=1 npm run
+   test:connected` em `apps/dashboard`. O cenário usa dados de teste e executa
+   limpeza lógica, preservando a auditoria append-only.
 
 ## Regras de implementação
 
@@ -69,5 +73,7 @@ Uma mudança só é considerada pronta quando:
 - lint, testes e build passam;
 - isolamento entre dois tenants foi exercitado quando aplicável;
 - falha/retry/crash recovery foram testados em mudanças da fila;
+- o E2E conectado foi executado quando a mudança alcança a console, fonte,
+  autenticação, webhook ou fluxo de entrega;
 - documentação e `.env.example` refletem novas configurações;
 - não há regressão de retenção, criptografia ou auditoria.

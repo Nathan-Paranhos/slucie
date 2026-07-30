@@ -195,8 +195,11 @@ Limites:
 - tolerância de assinatura: `30..3600` segundos.
 
 O worker C#/.NET 8 possui handlers para `webhook.process`,
-`process_webhook`, `deliver_event` e `reconcile_provider`. Para fontes novas,
-prefira `webhook.process`.
+`process_webhook`, `deliver_event` e `reconcile_provider`. O CLI mantém
+`webhook.process` como default quando `job.type` é omitido; a criação de fonte
+no dashboard configurado usa `deliver_event`. Os três tipos de entrega são
+aceitos pelo mesmo handler de saída atual, portanto escolha e mantenha o tipo
+compatível com o fluxo que a sua instalação já opera.
 
 As colunas da fonte ainda controlam:
 
@@ -204,6 +207,12 @@ As colunas da fonte ainda controlam:
 - `max_body_bytes`;
 - retenção herdada do tenant;
 - reconciliação e sua janela de 1 a 168 horas.
+
+Para fontes novas criadas pelo dashboard, a reconciliação inicia desativada.
+Ative-a somente depois de configurar `WORKER_RECONCILIATION_ENDPOINTS_JSON` e
+o bloco `provider.reconciliation` cifrado da fonte. Fontes já existentes ou
+provisionadas por automação preservam o estado gravado no banco; revise-o antes
+de habilitar o cron de reconciliação em produção.
 
 ## Provisionar uma fonte
 
@@ -249,6 +258,11 @@ arbitrário sem membership administrativa é recusado. O resultado JSON informa
 do shell; em produção, injete-o no processo por um secret manager e descarte o
 ambiente depois do provisionamento.
 
+Para operação humana, prefira **Fontes → Criar fonte** no dashboard conectado.
+A resposta da UI apresenta `webhookUrl` completo (no Compose local, porta
+`3001`) e não devolve o segredo depois da gravação. O endpoint público continua
+seguindo o mesmo contrato documentado acima.
+
 ## Envelopes e rotação
 
 Segredo e configuração usam AES-256-GCM com contexts distintos:
@@ -276,3 +290,11 @@ versão existente.
 | Redis indisponível em fail-closed | `503` |
 
 Detalhes completos de request e response estão em [API HTTP](api.md).
+
+## Cobertura E2E conectada
+
+`apps/dashboard/tests/connected.e2e.mjs` cria fontes temporárias e envia
+webhooks assinados para Asaas, PagBank, Mercado Pago, Stripe e Pix. Além do
+aceite, o cenário exercita assinatura inválida, duplicata idempotente e conflito
+de payload. Execute-o contra a stack publicada conforme
+[Desenvolvimento local](local-development.md#e2e-conectado-da-stack-completa).

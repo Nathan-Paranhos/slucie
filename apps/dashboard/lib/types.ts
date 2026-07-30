@@ -10,7 +10,8 @@ export type Provider =
   | "pagbank"
   | "mercado-pago"
   | "stripe"
-  | "pix";
+  | "pix"
+  | "generic";
 
 export interface Stat {
   label: string;
@@ -26,6 +27,7 @@ export interface Activity {
   detail: string;
   time: string;
   tone: "success" | "warning" | "danger";
+  jobId?: string;
 }
 
 export interface Job {
@@ -67,12 +69,16 @@ export interface Source {
   status: "active" | "inactive";
   events24h: string;
   successRate: string;
+  reconciliationEnabled: boolean;
+  reconciliationWindowHours: number;
+  reconciliationLastSuccessAt: string | null;
+  reconciliationHasError: boolean;
 }
 
 export interface Destination {
   id: string;
   name: string;
-  kind: "webhook" | "data-lake" | "internal";
+  kind: "http" | "webhook" | "data-lake" | "internal";
   description: string;
   host: string;
   status: "active" | "inactive";
@@ -100,6 +106,7 @@ export interface Worker {
   processed: string;
   uptime: string;
   cpu: number;
+  lastSeenAt?: string;
 }
 
 export interface Tenant {
@@ -111,6 +118,56 @@ export interface Tenant {
   retentionDays: number;
   eventsMonth: string;
   members: number;
+}
+
+export type ServiceHealthStatus = "healthy" | "degraded" | "unavailable";
+
+export interface ServiceHealth {
+  id: "database" | "ingest" | "worker";
+  label: string;
+  status: ServiceHealthStatus;
+  detail: string;
+}
+
+export interface JobDistribution {
+  total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  retry: number;
+  deadLetter: number;
+}
+
+export interface OperationalSettings {
+  security: {
+    oidcConfigured: boolean;
+    accountMfaEnabled: boolean;
+    sessionHours: number;
+  };
+  retention: {
+    rawPayloadDays: number;
+    dedupeMetadataDays: number;
+    defaultMaxAttempts: number;
+    waitingForPurge: number;
+    nextPurgeAt: string | null;
+    lastPayloadPurgeAt: string | null;
+    payloadsPurged24h: number;
+  };
+  notifications: {
+    pending: number;
+    processing: number;
+    sent24h: number;
+    failed: number;
+  };
+  audit: {
+    records24h: number;
+  };
+  reconciliation: {
+    enabledSources: number;
+    totalSources: number;
+    sourcesWithError: number;
+    lastSuccessAt: string | null;
+  };
 }
 
 export interface DashboardPayload {
@@ -130,6 +187,12 @@ export interface DashboardPayload {
   pipelines: Pipeline[];
   workers: Worker[];
   tenants: Tenant[];
+  jobDistribution: JobDistribution;
+  operational: {
+    services: ServiceHealth[];
+    deadLetters: number;
+  };
+  settings: OperationalSettings;
 }
 
 export type Section =

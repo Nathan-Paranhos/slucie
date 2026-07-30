@@ -205,6 +205,26 @@ BEGIN
 END
 $$;
 
+DO $$
+DECLARE
+    v_display_name text;
+BEGIN
+    SELECT sluice.update_current_dashboard_profile('Contract Owner Updated')
+      INTO v_display_name;
+    IF v_display_name <> 'Contract Owner Updated' THEN
+        RAISE EXCEPTION 'dashboard profile function did not update the current user';
+    END IF;
+
+    BEGIN
+        PERFORM sluice.update_current_dashboard_profile('   ');
+        RAISE EXCEPTION 'dashboard profile function accepted an empty name';
+    EXCEPTION
+        WHEN SQLSTATE '22023' THEN
+            NULL;
+    END;
+END
+$$;
+
 SELECT set_config(
     'test.created_tenant_id',
     sluice.admin_create_tenant(

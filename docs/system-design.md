@@ -83,6 +83,38 @@ sequenceDiagram
     W->>D: conclui, reagenda ou envia a dead-letter
 ```
 
+## Fluxo operacional no dashboard conectado
+
+O dashboard não mantém uma cópia local da operação. A sessão identifica usuário
+e tenant; cada leitura de `/api/dashboard` abre uma transação com contexto RLS
+e monta a visão a partir de PostgreSQL. Em paralelo, ele consulta os health
+checks internos da API de ingestão e do worker com prazo limitado para indicar
+degradação sem bloquear a fila.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant O as Operador autenticado
+    participant UI as Dashboard Next.js
+    participant DB as PostgreSQL/RLS
+    participant I as API de ingestão
+    participant W as Worker
+
+    O->>UI: abre uma tela da console
+    UI->>DB: consultas no tenant da sessão
+    UI->>I: GET /health/ready (sonda interna)
+    UI->>W: GET /health/ready (sonda interna)
+    UI-->>O: métricas, jobs, DLQ, retenção e estado dos serviços
+    O->>UI: ação persistida (ex.: pausar fonte ou reconciliação)
+    UI->>DB: valida RBAC/RLS, grava mudança e auditoria
+    DB-->>UI: resultado seguro, sem segredo ou payload
+```
+
+As configurações mostradas na tela de Configurações são indicadores efetivos
+de segurança, retenção, outbox, auditoria e reconciliação; não há toggles
+locais que aparentem mudar o runtime. Ações aparecem somente quando há uma
+política persistida e auditada no banco.
+
 ### Decisão de processamento
 
 ```mermaid
@@ -107,14 +139,13 @@ flowchart TD
 
 ```mermaid
 stateDiagram-v2
-    [*] --> queued: evento aceito
-    queued --> processing: claim transacional
-    processing --> succeeded: destino aceitou 2xx
-    processing --> queued: falha transitória / retry
+    [*] --> pending: evento aceito
+    pending --> processing: claim transacional
+    processing --> completed: destino aceitou 2xx
+    processing --> pending: falha transitória / retry
     processing --> dead_letter: falha permanente ou tentativas esgotadas
-    processing --> queued: lease expirado (sweep)
-    dead_letter --> queued: redrive cria novo job
-    succeeded --> [*]
+    processing --> pending: lease expirado (sweep)
+    completed --> [*]
     dead_letter --> [*]
 ```
 
@@ -122,6 +153,16 @@ O redrive não reabre um job terminal: cria outro job ligado ao anterior. Isso
 preserva o histórico e evita apagar evidências da falha. A entrega é
 **at-least-once**; a chave `Idempotency-Key` torna o efeito effectively-once
 quando o destino também a respeita.
+
+## Cenário E2E conectado
+
+O cenário executável em `apps/dashboard/tests/connected.e2e.mjs` valida a stack
+publicada de ponta a ponta: health, sessão e autorização do dashboard, as 11
+rotas da console, criação e desligamento lógico de recursos, reconciliação,
+fonte/destino/pipeline e ingestão autenticada. Ele percorre Asaas, PagBank,
+Mercado Pago, Stripe e Pix, incluindo assinatura inválida, duplicata e conflito
+de deduplicação. A limpeza desativa os recursos de teste; registros de auditoria
+continuam preservados por design.
 
 ## Modelo de dados e isolamento
 

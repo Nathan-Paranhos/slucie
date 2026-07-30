@@ -59,6 +59,21 @@ describe("source runtime configuration", () => {
     expect(() => parseSourceRuntimeConfig({ schemaVersion: 2 })).toThrow();
   });
 
+  it.each([
+    "webhook.process",
+    "process_webhook",
+    "deliver_event",
+    "reconcile_provider"
+  ] as const)("accepts the worker-supported job type %s", (type) => {
+    expect(parseSourceRuntimeConfig({ job: { type } }).job.type).toBe(type);
+  });
+
+  it("rejects a syntactically valid job type without a worker handler", () => {
+    expect(() =>
+      parseSourceRuntimeConfig({ job: { type: "custom.webhook" } })
+    ).toThrow();
+  });
+
   it("requires provider-specific Pix authentication configuration", () => {
     expect(() => parseProviderSourceRuntimeConfig("pix", {})).toThrow();
   });

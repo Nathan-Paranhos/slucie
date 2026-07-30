@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   createSessionToken,
   isSecureSessionCookie,
+  isUsableSession,
   SESSION_COOKIE,
   SESSION_DURATION_SECONDS,
   verifySessionToken
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
 
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
-  if (!session || !hasDatabase()) {
+  if (!isUsableSession(session) || !hasDatabase()) {
     return NextResponse.json({ message: "Sessão inválida." }, { status: 401 });
   }
 

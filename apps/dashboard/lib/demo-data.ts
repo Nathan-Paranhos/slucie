@@ -272,7 +272,11 @@ export const demoDashboard: DashboardPayload = {
       endpointKey: "whk_asa_••••••7q",
       status: "active",
       events24h: "487,2K",
-      successRate: "99,98%"
+      successRate: "99,98%",
+      reconciliationEnabled: true,
+      reconciliationWindowHours: 48,
+      reconciliationLastSuccessAt: "26 jul 2026, 15:30:00",
+      reconciliationHasError: false
     },
     {
       id: "src_mp_checkout",
@@ -282,7 +286,11 @@ export const demoDashboard: DashboardPayload = {
       endpointKey: "whk_mpa_••••••2n",
       status: "active",
       events24h: "321,8K",
-      successRate: "99,91%"
+      successRate: "99,91%",
+      reconciliationEnabled: true,
+      reconciliationWindowHours: 48,
+      reconciliationLastSuccessAt: "26 jul 2026, 15:30:00",
+      reconciliationHasError: false
     },
     {
       id: "src_pagbank_order",
@@ -292,7 +300,11 @@ export const demoDashboard: DashboardPayload = {
       endpointKey: "whk_pgb_••••••4m",
       status: "active",
       events24h: "218,4K",
-      successRate: "99,89%"
+      successRate: "99,89%",
+      reconciliationEnabled: true,
+      reconciliationWindowHours: 48,
+      reconciliationLastSuccessAt: "26 jul 2026, 15:30:00",
+      reconciliationHasError: false
     },
     {
       id: "src_pix_fraud",
@@ -302,7 +314,11 @@ export const demoDashboard: DashboardPayload = {
       endpointKey: "whk_pix_••••••9x",
       status: "active",
       events24h: "163,1K",
-      successRate: "99,97%"
+      successRate: "99,97%",
+      reconciliationEnabled: true,
+      reconciliationWindowHours: 48,
+      reconciliationLastSuccessAt: "26 jul 2026, 15:30:00",
+      reconciliationHasError: false
     },
     {
       id: "src_stripe_bill",
@@ -312,7 +328,11 @@ export const demoDashboard: DashboardPayload = {
       endpointKey: "whk_stp_••••••3d",
       status: "inactive",
       events24h: "11,9K",
-      successRate: "98,72%"
+      successRate: "98,72%",
+      reconciliationEnabled: false,
+      reconciliationWindowHours: 48,
+      reconciliationLastSuccessAt: null,
+      reconciliationHasError: false
     }
   ],
   destinations: [
@@ -462,5 +482,41 @@ export const demoDashboard: DashboardPayload = {
       eventsMonth: "611K",
       members: 2
     }
-  ]
+  ],
+  jobDistribution: {
+    total: 1240000,
+    pending: 12400,
+    processing: 153760,
+    completed: 899000,
+    retry: 51200,
+    deadLetter: 23640
+  },
+  operational: {
+    services: [
+      { id: "database", label: "PostgreSQL", status: "healthy", detail: "Consultas operacionais disponíveis" },
+      { id: "ingest", label: "Ingestão", status: "healthy", detail: "Healthcheck respondeu" },
+      { id: "worker", label: "Worker", status: "healthy", detail: "Healthcheck respondeu" }
+    ],
+    deadLetters: 1
+  },
+  settings: {
+    security: { oidcConfigured: true, accountMfaEnabled: true, sessionHours: 8 },
+    retention: {
+      rawPayloadDays: 90,
+      dedupeMetadataDays: 2555,
+      defaultMaxAttempts: 8,
+      waitingForPurge: 0,
+      nextPurgeAt: "26 out 2026, 15:30:00",
+      lastPayloadPurgeAt: "26 jul 2026, 15:30:00",
+      payloadsPurged24h: 1842
+    },
+    notifications: { pending: 0, processing: 0, sent24h: 1, failed: 0 },
+    audit: { records24h: 42 },
+    reconciliation: {
+      enabledSources: 4,
+      totalSources: 5,
+      sourcesWithError: 0,
+      lastSuccessAt: "26 jul 2026, 15:30:00"
+    }
+  }
 };

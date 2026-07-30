@@ -2,8 +2,13 @@ import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
+  createSessionToken,
   isDemoMode,
+  isSecureSessionCookie,
+  isUsableSession,
   SESSION_COOKIE,
+  SESSION_DURATION_SECONDS,
+  type SessionClaims,
   verifySessionToken
 } from "@/lib/auth";
 import { hasDatabase, withTenant } from "@/lib/db";
@@ -32,6 +37,74 @@ function text(value: unknown, max = 200) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
+function resourceName(value: unknown) {
+  if (typeof value !== "string") return "";
+  const normalized = value.trim();
+  return normalized.length >= 3 && normalized.length <= 100
+    ? normalized
+    : "";
+}
+
+async function profileResponse(
+  session: SessionClaims,
+  name: string,
+  demo = false
+) {
+  const token = await createSessionToken({
+    sub: session.sub,
+    email: session.email,
+    name,
+    role: session.role,
+    tenantId: session.tenantId
+  });
+  const response = NextResponse.json({ ok: true, ...(demo ? { demo: true } : {}) });
+  response.cookies.set({
+    name: SESSION_COOKIE,
+    value: token,
+    httpOnly: true,
+    secure: isSecureSessionCookie(),
+    sameSite: "strict",
+    path: "/",
+    maxAge: SESSION_DURATION_SECONDS
+  });
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+
+function publicWebhookUrl(
+  request: Request,
+  provider: string,
+  endpointKey: string
+) {
+  const configured = process.env.SLUICE_INGEST_PUBLIC_URL?.trim();
+  let base = configured?.replace(/\/+$/, "");
+
+  if (!base) {
+    let requestUrl = new URL(request.url);
+    const origin = request.headers.get("origin");
+    if (origin) {
+      try {
+        // Actions are same-origin protected before this helper is called. On a
+        // reverse proxy, `request.url` can contain the internal container host;
+        // the browser origin is the correct public host for the generated URL.
+        requestUrl = new URL(origin);
+      } catch {
+        // Keep the request URL when a malformed Origin reaches this helper.
+      }
+    }
+    const localHost =
+      requestUrl.hostname === "localhost" ||
+      requestUrl.hostname === "127.0.0.1" ||
+      requestUrl.hostname === "::1";
+    base = localHost
+      ? `${requestUrl.protocol}//${requestUrl.hostname}:3001`
+      : requestUrl.origin;
+  }
+
+  const routeProvider = provider === "mercado_pago" ? "mercado-pago" : provider;
+  return `${base}/v1/webhooks/${routeProvider}/${endpointKey}`;
+}
+
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) {
     return NextResponse.json({ message: "Origem não permitida." }, { status: 403 });
@@ -39,25 +112,37 @@ export async function POST(request: Request) {
 
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
-  if (!session) {
+  if (!isUsableSession(session)) {
     return NextResponse.json({ message: "Sessão inválida." }, { status: 401 });
-  }
-  if (session.role !== "owner" && session.role !== "admin") {
-    return NextResponse.json(
-      { message: "Permissão de administrador necessária." },
-      { status: 403 }
-    );
   }
 
   let body: ActionInput;
   try {
     body = (await request.json()) as ActionInput;
   } catch {
-    return NextResponse.json({ message: "JSON inválido." }, { status: 400 });
+      return NextResponse.json({ message: "JSON inválido." }, { status: 400 });
+  }
+
+  const profileName =
+    body.action === "update_profile" ? text(body.input?.name, 100) : undefined;
+  if (body.action === "update_profile" && !profileName) {
+    return NextResponse.json({ message: "Nome é obrigatório." }, { status: 400 });
+  }
+
+  if (
+    body.action !== "update_profile" &&
+    session.role !== "owner" &&
+    session.role !== "admin"
+  ) {
+    return NextResponse.json(
+      { message: "Permissão de administrador necessária." },
+      { status: 403 }
+    );
   }
 
   if (isDemoMode()) {
     await new Promise((resolve) => setTimeout(resolve, 180));
+    if (profileName) return profileResponse(session, profileName, true);
     return NextResponse.json({
       ok: true,
       demo: true,
@@ -81,6 +166,26 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (profileName) {
+      const name = await withTenant(tenantId, session.sub, async (client) => {
+        const result = await client.query<{ display_name: string }>(
+          `SELECT sluice.update_current_dashboard_profile($1) AS display_name`,
+          [profileName]
+        );
+        const displayName = result.rows[0]?.display_name;
+        if (!displayName) throw new Error("profile_update_failed");
+        await client.query(
+          `INSERT INTO sluice.audit_log
+             (tenant_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+           VALUES ($1, 'user', $2, 'user.profile_updated', 'user', $2,
+                   jsonb_build_object('display_name_changed', true))`,
+          [tenantId, session.sub]
+        );
+        return displayName;
+      });
+      return profileResponse(session, name);
+    }
+
     if (body.action === "redrive_job") {
       if (!validUuid(body.id) || body.tenantId !== tenantId) {
         return NextResponse.json({ message: "Job inválido." }, { status: 400 });
@@ -126,8 +231,33 @@ export async function POST(request: Request) {
           `INSERT INTO sluice.audit_log
              (tenant_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
            VALUES ($1, 'user', $2, 'resource.status_changed', $3, $4,
-                   jsonb_build_object('status', $5))`,
+                   jsonb_build_object('status', $5::text))`,
           [tenantId, session.sub, table, body.id, status]
+        );
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "toggle_source_reconciliation") {
+      if (!validUuid(body.id)) {
+        return NextResponse.json({ message: "Fonte inválida." }, { status: 400 });
+      }
+      const enabled = body.active === true;
+      await withTenant(tenantId, session.sub, async (client) => {
+        const result = await client.query(
+          `UPDATE sluice.webhook_sources
+              SET reconciliation_enabled = $1, updated_at = clock_timestamp()
+            WHERE tenant_id = $2 AND id = $3`,
+          [enabled, tenantId, body.id]
+        );
+        if (result.rowCount !== 1) throw new Error("source_not_found");
+        await client.query(
+          `INSERT INTO sluice.audit_log
+             (tenant_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+           VALUES ($1, 'user', $2, 'webhook_source.reconciliation_changed',
+                   'webhook_source', $3,
+                   jsonb_build_object('enabled', $4::boolean))`,
+          [tenantId, session.sub, body.id, enabled]
         );
       });
       return NextResponse.json({ ok: true });
@@ -136,10 +266,10 @@ export async function POST(request: Request) {
     if (body.action === "create_resource") {
       const resource = body.resource;
       const input = body.input ?? {};
-      const name = text(input.name, 100);
+      const name = resourceName(input.name);
       if (!name) {
         return NextResponse.json(
-          { message: "Nome é obrigatório." },
+          { message: "O nome deve conter entre 3 e 100 caracteres." },
           { status: 400 }
         );
       }
@@ -169,9 +299,12 @@ export async function POST(request: Request) {
           return NextResponse.json({ message: "Provedor inválido." }, { status: 400 });
         }
         const secret = text(input.secret, 2048);
-        if (!secret) {
+        const reconciliationEnabled =
+          input.reconciliationEnabled === true ||
+          input.reconciliationEnabled === "true";
+        if (Buffer.byteLength(secret, "utf8") < 16) {
           return NextResponse.json(
-            { message: "Segredo é obrigatório." },
+            { message: "O segredo deve conter pelo menos 16 bytes UTF-8." },
             { status: 400 }
           );
         }
@@ -237,8 +370,9 @@ export async function POST(request: Request) {
           await client.query(
             `INSERT INTO sluice.webhook_sources
                (id, tenant_id, endpoint_key, provider, name, status,
-                signing_secret_envelope, config_envelope, key_version)
-             VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8)`,
+                signing_secret_envelope, config_envelope, key_version,
+                reconciliation_enabled)
+             VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8, $9)`,
             [
               sourceId,
               tenantId,
@@ -247,11 +381,28 @@ export async function POST(request: Request) {
               name,
               secretEnvelope.bytes,
               configEnvelope.bytes,
-              secretEnvelope.keyVersion
+              secretEnvelope.keyVersion,
+              reconciliationEnabled
             ]
           );
+          await client.query(
+            `INSERT INTO sluice.audit_log
+               (tenant_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+             VALUES ($1, 'user', $2, 'webhook_source.created', 'webhook_source', $3,
+                     jsonb_build_object(
+                       'provider', $4::text,
+                       'name', $5::text,
+                       'reconciliation_enabled', $6::boolean
+                     ))`,
+            [tenantId, session.sub, sourceId, provider, name, reconciliationEnabled]
+          );
         });
-        return NextResponse.json({ ok: true, id: sourceId, endpointKey });
+        return NextResponse.json({
+          ok: true,
+          id: sourceId,
+          endpointKey,
+          webhookUrl: publicWebhookUrl(request, provider, endpointKey)
+        });
       }
 
       if (resource === "destinations") {
@@ -277,8 +428,8 @@ export async function POST(request: Request) {
           ),
           `destination-config:${tenantId}:${destinationId}`
         );
-        await withTenant(tenantId, session.sub, (client) =>
-          client.query(
+        await withTenant(tenantId, session.sub, async (client) => {
+          await client.query(
             `INSERT INTO sluice.destinations
                (id, tenant_id, name, kind, status, config_envelope,
                 key_version, allowed_hosts)
@@ -291,8 +442,15 @@ export async function POST(request: Request) {
               envelope.keyVersion,
               allowedHost
             ]
-          )
-        );
+          );
+          await client.query(
+            `INSERT INTO sluice.audit_log
+               (tenant_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+             VALUES ($1, 'user', $2, 'destination.created', 'destination', $3,
+                     jsonb_build_object('host', $4::text, 'name', $5::text))`,
+            [tenantId, session.sub, destinationId, allowedHost, name]
+          );
+        });
         return NextResponse.json({ ok: true, id: destinationId });
       }
 
@@ -316,6 +474,17 @@ export async function POST(request: Request) {
                (tenant_id, pipeline_id, destination_id, position)
              VALUES ($1, $2, $3, 0)`,
             [tenantId, pipelineId, input.destinationId]
+          );
+          await client.query(
+            `INSERT INTO sluice.audit_log
+               (tenant_id, actor_type, actor_id, action, resource_type, resource_id, metadata)
+             VALUES ($1, 'user', $2, 'pipeline.created', 'pipeline', $3,
+                     jsonb_build_object(
+                       'source_id', $4::uuid,
+                       'destination_id', $5::uuid,
+                       'name', $6::text
+                     ))`,
+            [tenantId, session.sub, pipelineId, input.sourceId, input.destinationId, name]
           );
         });
         return NextResponse.json({ ok: true, id: pipelineId });

@@ -198,9 +198,12 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : "bootstrap failed";
+  const diagnostic = error instanceof Error ? error.stack : undefined;
+  process.stderr.write(`${diagnostic ?? String(error)}\n`);
   process.stderr.write(
     `${JSON.stringify({
-      error: error instanceof Error ? error.message : "bootstrap failed"
+      error: message
     })}\n`
   );
   process.exitCode = 1;

@@ -71,3 +71,18 @@ tenants, SSRF/egress, rate limit, retenção/LGPD e configuração de proxy TLS.
 Só libere após corrigir achados críticos/altos ou obter aceite de risco formal
 do responsável. Anexe ao release o escopo, data, versão/commit testado e plano
 de correção; não anexe payloads, segredos ou dados pessoais.
+
+## Cenário integrado obrigatório
+
+Além das verificações unitárias, contratos SQL e builds, execute o E2E
+conectado contra a imagem/Compose candidata antes da liberação:
+
+```bash
+cd apps/dashboard
+SLUICE_CONNECTED_E2E=1 npm run test:connected
+```
+
+O cenário requer um owner/admin ativo e valida dashboard conectado, autorização,
+ações auditadas, reconciliação e os cinco adaptadores de webhook. Registre no
+artefato de release as URLs de ambiente, o commit/imagens testados, data e
+resultado, sem incluir a sessão temporária, senhas, segredos ou payloads.

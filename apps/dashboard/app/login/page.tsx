@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { Brand } from "@/components/brand";
-import { isDemoMode, SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import {
+  isDemoMode,
+  isUsableSession,
+  SESSION_COOKIE,
+  verifySessionToken
+} from "@/lib/auth";
 import { oidcConfig } from "@/lib/oidc";
 import { LoginForm } from "./login-form";
 
@@ -16,7 +21,7 @@ export default async function LoginPage({
   searchParams: Promise<{ returnTo?: string }>;
 }) {
   const existing = (await cookies()).get(SESSION_COOKIE)?.value;
-  if (existing && (await verifySessionToken(existing))) {
+  if (existing && isUsableSession(await verifySessionToken(existing))) {
     redirect("/");
   }
 

@@ -38,7 +38,7 @@ O deploy possui três imagens de aplicação independentes:
 |---|---|---|
 | `ingest-api` | Node.js 22, Fastify, TypeScript | autenticação do PSP, schema, rate limit e persistência |
 | `worker` | .NET 8 Worker Service, Npgsql | claim, heartbeat, entrega, reconciliação, retry e dead-letter |
-| `dashboard` | Next.js 16.2, React 19 | operação, configuração, métricas e redrive administrativo |
+| `dashboard` | Next.js 16.2, React 19 | operação conectada por RLS, configuração persistida, métricas e redrive administrativo |
 
 PostgreSQL e Redis são dependências de infraestrutura, não filas alternativas.
 
@@ -103,7 +103,7 @@ Jobs terminais não são apagados pela fila.
 
 ## Handlers em C#
 
-`webhook.process`/entrega HTTP:
+`webhook.process`, `process_webhook` e `deliver_event`/entrega HTTP:
 
 - carrega evento, destino e configuração pelo contrato SQL;
 - recusa payload já purgado;
@@ -127,6 +127,20 @@ Notificações de dead-letter são consumidas a partir de
 `LISTEN/NOTIFY` reduz a latência, com polling como fallback. O subscriber Redis
 aceita sinais de um publisher externo opcional; o deploy padrão não depende
 dele.
+
+## Dashboard conectado
+
+No modo conectado, a console lê PostgreSQL usando `app.tenant_id` e
+`app.user_id` por transação. Os cards e tabelas vêm de eventos, jobs, tentativas,
+efeitos, outbox, auditoria e checkpoints; payloads e segredos não entram no
+payload da UI. A interface inclui o health observado de PostgreSQL, API de
+ingestão e worker, mas esses checks não participam do processamento da fila.
+
+Configurações exibidas como retenção, auditoria e notificações são leitura do
+estado efetivo. As ações de fonte, destino, pipeline, perfil e reconciliação são
+persistidas sob RLS e auditadas. Fontes criadas pela UI começam com
+reconciliação desativada até que o endpoint fixo do worker e a configuração
+cifrada de reconciliação da fonte estejam preparados.
 
 ## Agendamento
 

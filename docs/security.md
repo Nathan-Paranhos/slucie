@@ -75,7 +75,7 @@ normalizar cabeçalhos e substituir, não concatenar cegamente,
 ### Administração
 
 - senha armazenada como Argon2id;
-- sessão JWT assinada, curta, `HttpOnly` e `SameSite=Lax`;
+- sessão JWT assinada, curta, `HttpOnly` e `SameSite=Strict`;
 - cookie `Secure` por padrão em produção;
 - checagem de origem nas mutações;
 - papéis owner/admin/operator/viewer;

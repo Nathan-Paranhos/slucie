@@ -292,24 +292,53 @@ Expira o cookie e retorna `{ "ok": true }`.
 
 ### `GET /api/dashboard`
 
-Exige sessão. Retorna cards, série temporal, jobs, eventos, fontes, destinos,
-pipelines, workers e tenants visíveis no contexto RLS. Owner pode informar
-`?tenant={uuid}`; os demais papéis permanecem no tenant da sessão.
+Exige sessão. Retorna um retrato operacional gerado no contexto RLS da sessão:
+
+- cards e série de eventos das últimas 24 horas;
+- jobs, eventos, fontes, destinos, pipelines, workers e tenants visíveis;
+- `jobDistribution`, incluindo pendentes, processando, concluídos, retries e
+  dead-letter;
+- `operational`, com a contagem real de dead-letter e health de PostgreSQL,
+  ingestão e worker;
+- `settings`, com retenção efetiva do tenant, outbox de notificações,
+  auditoria, estado da conta e checkpoints de reconciliação.
+
+O payload não inclui segredo, corpo de webhook ou configuração cifrada. A
+consulta de PostgreSQL é feita com `app.tenant_id` e `app.user_id` locais à
+transação. Os checks de ingestão e worker são sondas internas com prazo curto;
+um check indisponível aparece como degradado/indisponível no dashboard, sem
+alterar dados da fila.
+
+Owner pode informar `?tenant={uuid}` para um tenant ao qual tenha acesso; os
+demais papéis permanecem no tenant da sessão. A visão agregada `tenant=all` é
+restrita ao modo demo e não é aceita no modo conectado.
 
 ### `POST /api/actions`
 
-Exige sessão owner/admin e valida mesma origem quando o header `Origin` está
-presente. Ações atuais:
+Exige sessão e valida mesma origem quando o header `Origin` está presente.
+`update_profile` está disponível para a própria identidade autenticada; as
+demais ações exigem owner/admin. Ações atuais:
 
 - `redrive_job`;
 - `toggle_resource`;
+- `toggle_source_reconciliation`;
 - `create_resource`.
+- `update_profile`.
 
 Recursos criáveis: tenant, fonte, destino e pipeline. Em
 `SLUICE_DEMO_MODE=true`, a ação é simulada e retorna `demo: true`.
 
-Não envie segredos por essa API fora de HTTPS. Segredos de fonte e configuração
-de destino são cifrados antes da escrita.
+`toggle_resource` persiste a ativação/pausa de fontes, destinos e pipelines;
+`toggle_source_reconciliation` altera somente a fonte indicada e grava
+auditoria. O dashboard pede confirmação antes de ativar reconciliação porque o
+worker precisa ter o endpoint fixo do provedor **e** a configuração cifrada da
+fonte preparados. Fontes criadas pela UI começam com reconciliação desativada;
+a resposta conectada inclui
+`endpointKey` e `webhookUrl` para que o operador possa configurar o PSP.
+
+`update_profile` renova o cookie de sessão com o nome atualizado. Não envie
+segredos por essa API fora de HTTPS. Segredos de fonte e configuração de destino
+são cifrados antes da escrita e não voltam na resposta.
 
 ### `GET /api/health`
 
@@ -320,12 +349,15 @@ Público para health check:
   "status": "ok",
   "service": "sluice-dashboard",
   "databaseConfigured": true,
+  "databaseReady": true,
   "timestamp": "2026-01-01T12:00:00.000Z"
 }
 ```
 
-`databaseConfigured` apenas indica presença de `DATABASE_URL`; não confirma
-uma query bem-sucedida.
+`databaseConfigured` indica presença de `DATABASE_URL`; `databaseReady`
+confirma uma consulta `SELECT 1` bem-sucedida. Em modo conectado, falha de
+consulta retorna `503` com `status: "not_ready"`. Em modo demo sem banco, o
+endpoint permanece pronto para permitir a demonstração isolada.
 
 ## API de gestão
 
