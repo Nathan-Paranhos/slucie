@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { isProductionRuntime } from "./runtime";
 
 export interface OidcConfig {
   issuer: string;
@@ -24,7 +25,7 @@ function required(name: string) {
 export function oidcConfig(): OidcConfig | null {
   const configured = Boolean(process.env.SLUICE_OIDC_ISSUER?.trim());
   if (!configured) {
-    if (process.env.NODE_ENV === "production") {
+    if (isProductionRuntime()) {
       throw new Error("OIDC is mandatory in production; configure SLUICE_OIDC_ISSUER");
     }
     return null;

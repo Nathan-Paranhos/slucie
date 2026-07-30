@@ -225,12 +225,18 @@ Em `.env.local`, mantenha:
 
 ```dotenv
 SLUICE_DEMO_MODE=true
+SLUICE_RUNTIME_ENV=development
 SLUICE_SESSION_SECRET=development-session-secret-with-at-least-32-characters
 SLUICE_COOKIE_SECURE=false
 SLUICE_DEMO_EMAIL=admin@sluice.local
 SLUICE_DEMO_PASSWORD=sluice-demo
 DATABASE_URL=
 ```
+
+No Compose, `infra/compose.dev.yml` injeta `SLUICE_RUNTIME_ENV=development`
+automaticamente. Ao iniciar o dashboard fora do Compose, mantenha essa mesma
+variável para liberar o fluxo local por senha; valores ausentes ou inválidos
+adotam a política segura de produção.
 
 O conteúdo do modo demo prioriza os dados simulados. Como o readiness verifica
 qualquer `DATABASE_URL` configurada, deixe-a vazia para reduzir acoplamento e

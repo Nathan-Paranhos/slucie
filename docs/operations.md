@@ -108,7 +108,7 @@ iniciar quando seu contrato SQL está incompleto.
 
 ### API
 
-- `NODE_ENV=production` força HTTPS percebido pela aplicação.
+- `NODE_ENV=production` ativa os controles de produção da API.
 - Configure `TRUST_PROXY=true` somente atrás de proxy confiável que substitua
   corretamente `X-Forwarded-Proto`.
 - `REDIS_FAILURE_POLICY=closed` é o padrão seguro. O parser rejeita
@@ -139,6 +139,9 @@ iniciar quando seu contrato SQL está incompleto.
 
 - Use a role `sluice_dashboard`, sem propriedade de tabelas e sem
   `BYPASSRLS`.
+- `SLUICE_RUNTIME_ENV=production` (o padrão quando não informado) exige OIDC
+  e mantém o cookie de sessão HTTPS-only. O overlay de desenvolvimento força
+  `SLUICE_RUNTIME_ENV=development` em runtime.
 - Habilite `DATABASE_SSL=true` e mantenha
   `DATABASE_SSL_REJECT_UNAUTHORIZED=true` quando usar uma CA confiável.
 - O cookie de sessão permanece `HttpOnly`, `SameSite=Strict` e `Secure`.
