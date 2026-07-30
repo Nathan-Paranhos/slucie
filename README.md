@@ -7,8 +7,8 @@
 </p>
 
 <p align="center">
-  Plataforma open source e self-hosted para receber webhooks, processar jobs e
-  operar integrações multi-tenant com segurança.
+  Plataforma self-hosted para receber webhooks financeiros, processar efeitos
+  assíncronos e operar integrações multi-tenant com rastreabilidade.
 </p>
 
 <p align="center">
@@ -16,158 +16,199 @@
   <a href="SECURITY.md"><img alt="Security policy" src="https://img.shields.io/badge/security-policy-161B22"></a>
 </p>
 
-## O que é o Sluice
+## Cenário real do projeto
 
-Sluice é uma plataforma de ingestão de webhooks e execução assíncrona voltada
-ao ecossistema fintech e às PMEs brasileiras. O projeto mantém o estado durável
-em PostgreSQL, usa Redis apenas para funções efêmeras e pode ser operado
-inteiramente na infraestrutura da organização.
+O Sluice é o plano operacional de uma aplicação que recebe notificações de
+pagamento e eventos de provedores externos para múltiplos clientes (tenants).
+Ele não é um ERP nem uma página de demonstração: recebe o webhook assinado,
+preserva o evento com segurança, cria o trabalho durável e executa o efeito de
+destino de forma controlada. O dashboard serve para acompanhar essa operação e
+administrar fontes, destinos e pipelines dentro do tenant autorizado.
 
-O fluxo principal é:
+Os adaptadores implementados hoje atendem **Asaas, PagBank, Mercado Pago,
+Stripe e PIX configurável**. Cada fonte ganha uma URL própria:
+
+```text
+POST /v1/webhooks/:provider/:endpointKey
+```
+
+O painel conectado lê o PostgreSQL de verdade: eventos, jobs, dead-letter,
+fontes, destinos, pipelines, auditoria, notificações e saúde dos serviços.
+`SLUICE_DEMO_MODE=true` existe somente para demonstração isolada; não é o modo
+de operação normal.
+
+## Fluxo operacional
 
 ```mermaid
 flowchart LR
-    P[PSP] -->|HTTPS + assinatura| A[API Fastify]
-    A -->|evento + job<br/>uma transação| DB[(PostgreSQL)]
-    A -. rate limit .-> R[(Redis)]
-    DB -. NOTIFY .-> W[Worker C# / .NET 8]
-    W -->|efeito idempotente| D[Destino]
-    C[pg_cron] -->|sweep, purge,<br/>métricas e reconciliação| DB
-    UI[Dashboard Next.js] --> DB
+    Provider[Provedor de pagamento] -->|HTTPS + assinatura| Ingest[API Fastify]
+    Ingest -->|valida, limita e deduplica| Tx[transação SQL]
+    Tx --> Events[(PostgreSQL: eventos + jobs)]
+    Ingest -. rate limit / wake-up opcional .-> Redis[(Redis efêmero)]
+    Events -->|NOTIFY + polling| Worker[Worker .NET 8]
+    Worker -->|efeito idempotente| Destination[Destino configurado]
+    Worker -->|retry terminal| DLQ[Dead-letter]
+    Dashboard[Dashboard Next.js] -->|RLS por tenant| Events
+    Dashboard -->|ações auditadas| Tx
+    Scheduler[pg_cron] -->|retenção, sweep e reconciliação| Events
 ```
 
-### Garantias explícitas
+1. A API valida a assinatura específica do provedor e o schema mínimo do
+   evento antes de persistir qualquer coisa.
+2. Evento e primeiro job são registrados na mesma transação SQL. A chave
+   `(tenant, fonte, ID externo)` impede duplicidade durável.
+3. O worker faz claim com lease e fencing token, processa o destino e confirma
+   ou agenda o retry. Falha terminal fica em dead-letter; redrive cria outro
+   job e mantém o histórico.
+4. O dashboard mostra esse estado por tenant e grava mudanças administrativas
+   com auditoria. A tela de Workers mostra atividade de jobs e healthchecks; ela
+   não inventa métricas de CPU/memória que o runtime não publica.
 
-- Cada `(tenant, fonte, ID externo)` possui uma chave de deduplicação durável.
-- Evento e primeiro job são gravados na mesma transação.
-- A fila é **at-least-once**. Lease e fencing token impedem que um worker antigo
-  conclua um job recuperado por outro.
-- Efeitos externos usam uma chave idempotente para oferecer comportamento
-  effectively-once quando o destino também suporta idempotência.
-- Jobs terminais não são reabertos. Um redrive cria outro job e preserva o
-  histórico.
-- Payload bruto usa envelope encryption e é apagado automaticamente; os hashes
-  mínimos de deduplicação permanecem.
-- RLS está habilitado com `FORCE ROW LEVEL SECURITY` em todas as tabelas
-  multi-tenant.
+## Garantias e limites
 
-Não há promessa tecnicamente impossível de “exactly once” em chamadas HTTP.
-Consulte [Semântica da fila](docs/architecture.md#semântica-de-entrega).
+- A fila é **at-least-once**. Lease e fencing evitam que um worker antigo
+  confirme um job recuperado por outro.
+- Destinos recebem chave idempotente para comportamento effectively-once quando
+  também suportam idempotência.
+- Payloads brutos usam envelope encryption e expiram pela política de retenção;
+  hashes mínimos de deduplicação permanecem.
+- PostgreSQL é a fonte de verdade. Redis é usado apenas para rate limit e
+  wake-up opcional — nunca para armazenar jobs.
+- RLS com `FORCE ROW LEVEL SECURITY` separa os tenants no banco.
+
+Não há promessa de “exactly once” para chamadas HTTP. Veja a
+[semântica de entrega](docs/architecture.md#semântica-de-entrega).
 
 ## Componentes
 
 | Componente | Tecnologia | Responsabilidade |
 |---|---|---|
-| `apps/ingest-api` | Node.js, TypeScript, Fastify | Autenticar, limitar, validar e persistir webhooks |
-| `apps/worker` | C#/.NET 8 Worker Service, Npgsql | Claim, heartbeat, handlers, retry e dead-letter |
-| `apps/dashboard` | Next.js 16.2.12, React 19.2.8 | Operação por tenant, métricas e administração |
+| `apps/ingest-api` | Node.js, TypeScript, Fastify | Autenticação, rate limit, validação e persistência de webhooks |
+| `apps/worker` | C#/.NET 8 Worker Service, Npgsql | Claim, heartbeat, handlers, retry, redrive e dead-letter |
+| `apps/dashboard` | Next.js, React | Operação por tenant e administração auditada |
 | `database` | PostgreSQL 17, pg_cron | Estado durável, fila, RLS, retenção e agendamento |
-| Redis | Redis 7 | Rate limit e canal opcional de wake-up; nunca jobs |
+| Redis | Redis 7 | Rate limit e canal opcional de wake-up |
 
-O dashboard usa Next.js 16.2.12 e React 19.2.8 no lugar da referência inicial
-Next.js 14 para hardening de dependências, preservando a identidade visual e os
-contratos de dados.
+## Banco: SQL, não Prisma
 
-## Início rápido
+Este projeto **não usa Prisma**. O esquema, funções, políticas RLS e contratos
+vivem em [`database/migrations`](database/migrations) como migrações SQL
+idempotentes. No primeiro volume do PostgreSQL, o bootstrap
+`infra/postgres/init/00-bootstrap.sh` cria roles e aplica as migrações em ordem.
 
-Pré-requisitos: Docker Engine 24+ com Compose 2.24+ e Git.
+Para reaplicar as migrações em uma stack local já existente:
 
-```bash
-cp .env.example .env
-# Troque senhas, segredo de sessão e as chaves mestras de desenvolvimento.
-docker compose --env-file .env \
-  -f docker-compose.yml \
-  -f infra/compose.apps.yml \
-  -f infra/compose.dev.yml \
+```powershell
+docker compose --env-file .env `
+  -f docker-compose.yml `
+  -f infra/compose.apps.yml `
+  -f infra/compose.dev.yml `
+  exec -T postgres /docker-entrypoint-initdb.d/00-bootstrap.sh
+```
+
+O procedimento, as roles de aplicação e os testes de contrato estão em
+[Banco, roles e contratos SQL](docs/database.md).
+
+## Rodar localmente
+
+Pré-requisitos: Docker Engine 24+ com Compose 2.24+, Node.js 22+ e, para validar
+o worker fora do container, .NET SDK/runtime 8.
+
+No PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+# Troque os valores de desenvolvimento antes de expor qualquer porta.
+
+docker compose --env-file .env `
+  -f docker-compose.yml `
+  -f infra/compose.apps.yml `
+  -f infra/compose.dev.yml `
   up --build -d
+
+docker compose --env-file .env `
+  -f docker-compose.yml `
+  -f infra/compose.apps.yml `
+  -f infra/compose.dev.yml ps
 ```
 
-Esse comando inicia PostgreSQL, Redis, API, worker C#/.NET 8 e dashboard. O
-passo a passo para depurar cada aplicação fora dos containers está em
-[Desenvolvimento local](docs/local-development.md).
+Portas locais do overlay de desenvolvimento:
 
-O arquivo base contém o plano de dados. `infra/compose.apps.yml` adiciona as
-aplicações e suas redes; `infra/compose.dev.yml` publica portas somente para
-desenvolvimento local.
-
-Verifique o banco:
-
-```bash
-docker compose --env-file .env -f docker-compose.yml exec -T postgres sh -ec \
-  'PGPASSWORD="$POSTGRES_PASSWORD" psql --no-psqlrc \
-  -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-  -c "select extname from pg_extension order by 1"'
-```
-
-Os comandos equivalentes estão no [Makefile](Makefile):
-
-```bash
-make doctor
-make up
-make test-db
-```
-
-`make test` valida Compose, contratos do banco, API, dashboard e worker
-C#/.NET 8. A stack precisa estar ativa para os contratos SQL.
-
-Portas sugeridas para o conjunto completo:
-
-| Serviço | URL local |
+| Serviço | URL |
 |---|---|
-| Dashboard | `http://localhost:3000` |
-| API de ingestão | `http://localhost:3001` |
-| Diagnósticos do worker | `http://localhost:8082` |
+| Dashboard | <http://localhost:3000> |
+| API de ingestão | <http://localhost:3001> |
+| Diagnósticos do worker | <http://localhost:8082> |
 
-O dashboard inicia conectado ao PostgreSQL. Crie o primeiro owner pelo
-procedimento de [bootstrap local](docs/local-development.md#modo-conectado).
+Crie o primeiro owner e uma fonte de teste pelo
+[modo conectado](docs/local-development.md#modo-conectado). O Compose base só
+inicia o plano de dados; `infra/compose.apps.yml` adiciona as aplicações e
+`infra/compose.dev.yml` publica portas para a máquina local.
 
-## Produção
+## Testes
 
-O Compose incluído é uma referência operacional, não substitui desenho de
-capacidade, alta disponibilidade nem gestão de segredos. Em produção:
+Os testes rápidos por aplicação:
 
-- combine o arquivo base com `infra/compose.apps.yml` e, quando aplicável, o
-  overlay TLS; não use `infra/compose.dev.yml`;
-- termine HTTPS na borda e mantenha API, worker e dashboard em serviços
-  separados;
-- habilite TLS também entre aplicações, PostgreSQL e Redis;
-- injete a KEK mestra por um secret manager fora do banco e dos backups;
-- use WAL archiving/PITR, cópia externa criptografada e testes periódicos de
-  restauração;
-- restrinja egress do worker por allowlist para reduzir SSRF;
-- execute teste de carga e defina SLOs antes de receber tráfego real.
+```powershell
+npm --prefix apps/ingest-api run typecheck
+npm --prefix apps/ingest-api run lint
+npm --prefix apps/ingest-api test
 
-Veja o [runbook de operação](docs/operations.md) e o
-[modelo de segurança](docs/security.md).
+npm --prefix apps/dashboard run typecheck
+npm --prefix apps/dashboard run lint
+npm --prefix apps/dashboard test
+```
+
+Com a stack ativa, valide os contratos SQL:
+
+```powershell
+Get-Content database/tests/contracts.sql | docker compose --env-file .env `
+  -f docker-compose.yml `
+  -f infra/compose.apps.yml `
+  -f infra/compose.dev.yml `
+  exec -T postgres sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" exec psql --no-psqlrc -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+O teste conectado cria recursos efêmeros, exercita autorização, CRUD auditado e
+webhooks assinados de todos os cinco provedores; ao final desativa as fontes
+criadas:
+
+```powershell
+$env:SLUICE_CONNECTED_E2E = "1"
+npm --prefix apps/dashboard run test:connected
+```
+
+Em ambientes Unix que tenham `make`, `make test` reúne validação do Compose,
+contratos SQL, API, dashboard e worker. Consulte
+[Desenvolvimento local](docs/local-development.md) para as opções completas.
 
 ## Documentação
 
 - [Arquitetura e decisões](docs/architecture.md)
-- [Desenho de sistema e fluxos](docs/system-design.md)
+- [Desenho do sistema e fluxos](docs/system-design.md)
 - [Banco, roles e contratos SQL](docs/database.md)
-- [Segurança e threat model](docs/security.md)
-- [Retenção e LGPD](docs/lgpd-retention.md)
 - [Autenticação por provedor](docs/provider-authentication.md)
 - [API HTTP e contratos de entrega](docs/api.md)
-- [Operação, TLS, backup e recuperação](docs/operations.md)
-- [Checklist de liberação para produção](docs/production-readiness.md)
-- [Desenvolvimento local](docs/local-development.md)
+- [Operação, observabilidade, backup e recuperação](docs/operations.md)
+- [Segurança e threat model](docs/security.md)
+- [Retenção e LGPD](docs/lgpd-retention.md)
+- [Checklist de liberação](docs/production-readiness.md)
 - [Worker C#/.NET 8](apps/worker/README.md)
-- [Changelog](CHANGELOG.md)
-- [Roadmap](ROADMAP.md)
+- [Changelog](CHANGELOG.md) e [roadmap](ROADMAP.md)
 
-## Status e responsabilidade
+## Produção e responsabilidade
 
-Sluice é disponibilizado sem garantias, nos termos da Apache License 2.0.
-O projeto está em estágio pré-release e seus contratos ainda podem evoluir.
-Antes de uso produtivo, faça revisão independente de segurança, privacidade e
-conformidade aplicável ao seu tratamento de dados. A configuração sugerida de
-90 dias é apenas um padrão técnico; não constitui uma base legal ou prazo
-universal da LGPD.
+O Compose incluso é uma referência operacional, não um desenho completo de alta
+disponibilidade. Em produção, termine TLS na borda, mantenha aplicações e banco
+em redes separadas, injete segredos por um secret manager, habilite backup/PITR,
+restrinja o egress do worker e faça testes de restauração e carga.
+
+Sluice está em pré-release e é fornecido nos termos da Apache License 2.0. Antes
+de tratar dados reais, faça revisão independente de segurança, privacidade,
+retenção e conformidade aplicável.
 
 ## Contribuir
 
-Leia [CONTRIBUTING.md](CONTRIBUTING.md), o
-[Código de Conduta](CODE_OF_CONDUCT.md) e a
-[política de segurança](SECURITY.md). Contribuições são aceitas sob
+Leia [CONTRIBUTING.md](CONTRIBUTING.md), o [Código de Conduta](CODE_OF_CONDUCT.md)
+e a [política de segurança](SECURITY.md). Contribuições são aceitas sob
 [Apache License 2.0](LICENSE).

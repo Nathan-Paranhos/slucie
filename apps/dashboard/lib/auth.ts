@@ -11,6 +11,9 @@ export interface SessionClaims extends JWTPayload {
   tenantId: string;
 }
 
+const CONNECTED_TENANT_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export type SessionIdentity = Pick<
   SessionClaims,
   "sub" | "email" | "name" | "role" | "tenantId"
@@ -83,12 +86,22 @@ export function isDemoMode() {
   return true;
 }
 
+/**
+ * A signed token can outlive a runtime-mode change. Demo sessions use the
+ * synthetic "all" tenant, which must never reach connected-mode queries.
+ */
+export function isUsableSession(
+  session: SessionClaims | null | undefined
+): session is SessionClaims {
+  if (!session) return false;
+  return isDemoMode()
+    ? session.tenantId === "all"
+    : CONNECTED_TENANT_ID.test(session.tenantId);
+}
+
 export function isSecureSessionCookie() {
-  if (process.env.NODE_ENV === "production") {
-    return true;
-  }
-  if (process.env.SLUICE_COOKIE_SECURE !== undefined) {
-    return process.env.SLUICE_COOKIE_SECURE === "true";
-  }
-  return false;
+  // Production authentication is always HTTPS-only. An environment value can
+  // enable Secure cookies in development, but must never downgrade production.
+  if (process.env.NODE_ENV === "production") return true;
+  return process.env.SLUICE_COOKIE_SECURE === "true";
 }

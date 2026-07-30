@@ -11,6 +11,12 @@ O Compose pode iniciar o conjunto completo. Para debug e hot reload, suba
 somente PostgreSQL/Redis pela mesma cadeia de overlays e execute as três
 aplicações a partir do código-fonte.
 
+O banco é controlado por migrations SQL em `database/migrations`; o projeto
+não usa Prisma. Em um volume novo, o bootstrap do PostgreSQL aplica todas as
+migrations automaticamente. Para reaplicá-las de forma idempotente depois de
+uma alteração, use `make migrate` ou o comando Compose indicado em
+[Banco de dados e contratos SQL](database.md#aplicar-e-testar).
+
 ## Pré-requisitos
 
 - Git;
@@ -89,9 +95,15 @@ curl http://localhost:8082/health/ready
 curl http://localhost:3000/api/health
 ```
 
-O overlay de desenvolvimento publica as portas no host. Não o use em produção.
+O overlay de desenvolvimento publica as portas somente em `127.0.0.1`. Não o
+use em produção.
 O dashboard inicia em modo conectado conforme `.env.example`; conclua o
 bootstrap do primeiro owner em [Modo conectado](#modo-conectado).
+
+O health do dashboard em `http://localhost:3000/api/health` inclui
+`databaseReady: true` somente depois de uma consulta real ao PostgreSQL. A tela
+conectada lê o mesmo banco sob RLS; não depende de fixtures, cache local ou
+preferências de navegador para apresentar os indicadores operacionais.
 
 ### Opção B: infraestrutura em container, aplicações no código-fonte
 
@@ -280,10 +292,30 @@ FROM sluice.bootstrap_first_owner(
 A função só aceita uma instância sem usuários e sem tenants. Depois do
 bootstrap, faça login com a senha em texto usada para gerar o hash.
 
-## 5. Criar uma fonte
+## 5. Criar uma fonte e testar um webhook
 
-Os UUIDs de tenant e usuário retornados pelo bootstrap são necessários. O
-usuário deve ser owner/admin ativo. No diretório `apps/ingest-api`, configure:
+### Pelo dashboard conectado (recomendado)
+
+Faça login em `http://localhost:3000`, abra **Fontes** e escolha **Criar
+fonte**. A UI cifra o segredo antes de persistir, mostra apenas uma versão
+mascarada depois da criação e devolve a URL pública do webhook. No Compose de
+desenvolvimento ela usa a porta publicada da API:
+
+```text
+http://localhost:3001/v1/webhooks/{provider}/{endpointKey}
+```
+
+Fontes criadas pela UI começam com reconciliação desativada. Ative-a somente
+depois de configurar a base HTTPS fixa do provedor em
+`WORKER_RECONCILIATION_ENDPOINTS_JSON` e o bloco cifrado
+`provider.reconciliation` da fonte; sem ambos o job de reconciliação pode
+terminar em dead-letter. A alteração é persistida e auditada.
+
+### Pelo CLI de provisionamento
+
+O CLI é útil para provisionamento automatizado. Os UUIDs de tenant e usuário
+retornados pelo bootstrap são necessários. O usuário deve ser owner/admin
+ativo. No diretório `apps/ingest-api`, configure:
 
 ```bash
 export SLUICE_BOOTSTRAP_DATABASE_URL='postgres://sluice_dashboard:SENHA_DASHBOARD_DA_RAIZ@localhost:5432/sluice'
@@ -366,6 +398,30 @@ npm test
 `npm test` compila o output standalone e exercita login, proteção da console e
 mutações do modo demo.
 
+### E2E conectado da stack completa
+
+Com o Compose completo em execução, health verde e um owner/admin ativo no
+tenant, execute o teste contra os serviços publicados:
+
+```powershell
+Set-Location apps/dashboard
+$env:SLUICE_CONNECTED_E2E = "1"
+npm run test:connected
+```
+
+No Bash, use `SLUICE_CONNECTED_E2E=1 npm run test:connected`. Por padrão o
+teste procura `http://127.0.0.1:3000`, `http://127.0.0.1:3001` e
+`admin@sluice.local`; ajuste `SLUICE_DASHBOARD_URL`, `SLUICE_INGEST_URL` e
+`SLUICE_CONNECTED_E2E_EMAIL` quando necessário. Ele obtém uma sessão curta do
+container de dashboard, sem imprimir a chave de sessão nem exigir a senha do
+owner no terminal.
+
+O cenário verifica as 11 rotas da console, autenticação/autorização, proteção
+de origem, criação e desativação auditada de recursos, reconciliação e webhooks
+assinados de Asaas, PagBank, Mercado Pago, Stripe e Pix. Também cobre assinatura
+inválida, duplicata e conflito de deduplicação. A limpeza é lógica: os recursos
+de teste são desativados e a auditoria append-only é preservada.
+
 ## Parar e resetar
 
 Parar sem remover dados:
@@ -394,5 +450,7 @@ necessários.
 | `postgres_notify`/`redis_wakeup` degradado | listener reconecta; polling continua |
 | dashboard demo usa dados reais | confirme `SLUICE_DEMO_MODE=true` e reinicie |
 | dashboard conectado retorna `401` | owner, hash Argon2id e membership ativa |
+| dashboard conectado retorna `503` | PostgreSQL, `SLUICE_DASHBOARD_DATABASE_URL` e `/api/health` (`databaseReady`) |
 | destino vai para dead-letter | HTTPS, host exato na allowlist e configuração cifrada |
+| reconciliação vai para dead-letter | deixe a fonte desativada ou configure o endpoint HTTPS fixo do provedor no worker |
 | porta `8080` ocupada | mantenha worker em `8082` localmente |

@@ -190,15 +190,39 @@ Configure esses itens na plataforma de implantação. Não combine o overlay
 | API | `/health/ready` | PostgreSQL e, em fail-closed, Redis |
 | Worker | `/health/live` | processo ativo |
 | Worker | `/health/ready` | query PostgreSQL obrigatória; `LISTEN/NOTIFY` e Redis podem degradar |
-| Dashboard | `/api/health` | processo ativo e indicação se o DB foi configurado |
+| Dashboard | `/api/health` | processo ativo e consulta `SELECT 1` ao PostgreSQL quando configurado |
 
-O health do dashboard não executa uma query. Monitore separadamente uma
-operação autenticada ou a conectividade PostgreSQL.
+O health do dashboard retorna `databaseConfigured` e `databaseReady`. Em modo
+conectado, `databaseReady: false` torna o endpoint `503`; em modo demo sem
+banco, o endpoint permanece pronto. Monitore também uma sessão autenticada e
+as dependências de ingestão/worker, pois o health público não substitui o
+retrato operacional por tenant.
 
 Use liveness apenas para reinício do processo. Use readiness para retirar a
 réplica do balanceador. Não reinicie o worker apenas porque
 `postgres_notify` ou `redis_wakeup` aparece como `degraded_polling`; polling
 continua encontrando trabalho durável.
+
+## Dashboard conectado e ações operacionais
+
+Com `SLUICE_DEMO_MODE=false`, o dashboard é uma projeção de dados reais do
+PostgreSQL no contexto RLS do tenant selecionado. Ele exibe distribuição de
+jobs, dead-letter, fontes, destinos, pipelines, workers observados por
+tentativas, retenção, outbox, auditoria e checkpoints de reconciliação. Os
+health checks internos de ingestão e worker aparecem como `healthy`,
+`degraded` ou `unavailable`; eles não alteram nem escondem os registros de fila.
+
+A tela **Configurações** é deliberadamente de leitura: mostra as políticas e
+contadores efetivos, sem gravar toggles em `localStorage`. Somente controles
+com efeito persistido aparecem nas telas de recursos: pausar/ativar fonte,
+destino ou pipeline, redrive e habilitar/desabilitar reconciliação de uma fonte.
+Cada mutação usa a sessão/RLS e escreve auditoria.
+
+Fontes criadas pela UI começam com reconciliação desativada. Antes de ativá-la,
+configure `WORKER_RECONCILIATION_ENDPOINTS_JSON` com a base HTTPS fixa do
+provedor e o bloco cifrado `provider.reconciliation` da fonte; então valide uma
+execução. Caso contrário, `reconcile_provider` falhará de forma segura e poderá
+gerar dead-letter.
 
 ## Métricas
 

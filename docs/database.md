@@ -10,7 +10,14 @@ Este documento descreve o contrato implementado pelas migrations em
 uma migration nova e coordenação com a API de ingestão, o dashboard e,
 principalmente, o worker C#/.NET 8.
 
-## Versão e extensões
+## Fonte de schema, versão e extensões
+
+Este projeto **não usa Prisma**. Não há `schema.prisma`, geração de client ou
+comando `prisma migrate`: o schema, as roles, RLS, funções, triggers e agendas
+são definidos em migrations SQL versionadas em
+[`database/migrations`](../database/migrations). O script de bootstrap do
+PostgreSQL as aplica em ordem lexical, em uma única transação, tanto no primeiro
+volume quanto quando a rotina de migração é executada novamente.
 
 A imagem de referência usa PostgreSQL 17 e instala:
 
@@ -30,6 +37,7 @@ As migrations atuais são aplicadas em ordem lexical:
 | `0006` | agendas do `pg_cron` |
 | `0007` | autenticação e ações administrativas do dashboard |
 | `0008` | criação de tenant e políticas de escrita administrativas |
+| `0009` | atualização segura do perfil do usuário autenticado no dashboard |
 
 ## Roles
 
@@ -120,6 +128,7 @@ grants de tabela: todo o caminho é feito por
 | `current_user_is_tenant_admin(uuid)` | decisão restrita à identidade de `app.user_id` |
 | `admin_create_tenant(text, text, integer)` | cria tenant e torna o ator owner |
 | `admin_redrive_dead_letter(uuid, uuid, text)` | cria outro job e audita o motivo |
+| `update_current_dashboard_profile(text)` | atualiza o nome da identidade da sessão com RLS forçado |
 
 `lookup_dashboard_login` é necessariamente anterior à sessão RLS, mas só
 retorna o registro associado ao e-mail exato. As demais funções administrativas
@@ -127,7 +136,11 @@ validam identidade, membership e tenant. Escritas diretas do dashboard em
 fontes, destinos, pipelines e associações também exigem policy owner/admin.
 
 O redrive recusa job que não esteja em `dead_letter` e evento cujo envelope já
-tenha sido purgado.
+tenha sido purgado. O dashboard conectado também persiste, sob o mesmo
+contexto RLS, alterações de status de fontes, destinos e pipelines, e a
+ativação de reconciliação por fonte. Essas ações escrevem uma entrada em
+`audit_log`; preferências apenas visuais não são usadas como configuração de
+sistema.
 
 ## Contratos da ingestão
 

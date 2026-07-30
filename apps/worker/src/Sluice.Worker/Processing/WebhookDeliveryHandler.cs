@@ -39,6 +39,7 @@ public sealed class WebhookDeliveryHandler(
         byte[]? payload = null;
         try
         {
+            EnsureActiveDestinations(bundle);
             payload = crypto.Decrypt(
                 bundle.Event.RawBodyEnvelope,
                 EnvelopeCrypto.WebhookBodyContext(
@@ -87,6 +88,18 @@ public sealed class WebhookDeliveryHandler(
                 CryptographicOperations.ZeroMemory(destination.ConfigEnvelope);
             }
         }
+    }
+
+    internal static void EnsureActiveDestinations(DeliveryBundle bundle)
+    {
+        if (bundle.Destinations.Count != 0)
+        {
+            return;
+        }
+
+        throw new PermanentJobException(
+            "no_active_destinations",
+            "No active destinations match this delivery job.");
     }
 
     private async Task DeliverAsync(

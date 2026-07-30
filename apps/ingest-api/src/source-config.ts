@@ -3,6 +3,13 @@ import { decryptEnvelope, parseEnvelope } from "./crypto/envelope.js";
 import type { ProviderName } from "./providers/index.js";
 import { pixAdapterConfigSchema } from "./providers/pix.js";
 
+const supportedSourceJobTypes = [
+  "webhook.process",
+  "process_webhook",
+  "deliver_event",
+  "reconcile_provider"
+] as const;
+
 const sourceRuntimeConfigSchema = z
   .object({
     // ingest_event_and_enqueue currently persists schema_version=1 through the
@@ -11,7 +18,7 @@ const sourceRuntimeConfigSchema = z
     signatureToleranceSeconds: z.number().int().min(30).max(3_600).optional(),
     job: z
       .object({
-        type: z.string().regex(/^[a-z][a-z0-9._-]{1,127}$/).default("webhook.process"),
+        type: z.enum(supportedSourceJobTypes).default("webhook.process"),
         priority: z.number().int().min(0).max(1_000).default(100),
         maxAttempts: z.number().int().min(1).max(100).default(8)
       })

@@ -9,8 +9,6 @@ import {
   CalendarClock,
   Check,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   CircleGauge,
   Clock3,
   Copy,
@@ -23,7 +21,6 @@ import {
   GitBranch,
   KeyRound,
   LockKeyhole,
-  MoreHorizontal,
   Pause,
   Play,
   Plus,
@@ -188,7 +185,8 @@ function formatProvider(provider: string) {
     pagbank: "PagBank",
     "mercado-pago": "Mercado Pago",
     stripe: "Stripe",
-    pix: "Pix"
+    pix: "Pix",
+    generic: "Genérico"
   };
   return names[provider] ?? provider;
 }
@@ -282,24 +280,18 @@ function AreaChart({ values }: { values: number[] }) {
           <path d={line} className="chart-line" />
         </svg>
         <div className="chart-labels">
-          <span>00:00</span>
-          <span>06:00</span>
-          <span>12:00</span>
-          <span>18:00</span>
-          <span>24:00</span>
+          <span>há 24h</span>
+          <span>há 18h</span>
+          <span>há 12h</span>
+          <span>há 6h</span>
+          <span>agora</span>
         </div>
       </div>
       <div className="chart-legend">
         <span>
           <i className="legend-line" /> Eventos autenticados
         </span>
-        <span>
-          <i
-            className="legend-line"
-            style={{ background: "#16a36a" }}
-          />{" "}
-          SLO atendido
-        </span>
+        <span>Dados consultados diretamente do PostgreSQL</span>
       </div>
     </>
   );
@@ -324,7 +316,6 @@ function Overview({
                 Throughput agregado · últimas 24 horas
               </span>
             </div>
-            <Badge status="active" />
           </div>
           <div className="panel-body">
             <AreaChart values={data.chart} />
@@ -339,40 +330,53 @@ function Overview({
             <Activity size={14} className="orange" />
           </div>
           <div className="panel-body activity-list">
-            {data.activity.map((item, index) => (
-              <button
-                key={item.id}
-                className="activity-item"
-                style={{
-                  width: "100%",
-                  borderTop: 0,
-                  borderLeft: 0,
-                  borderRight: 0,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  background: "transparent"
-                }}
-                onClick={() => {
-                  const job = data.jobs[index % data.jobs.length];
-                  if (job) onSelectJob(job);
-                }}
-              >
-                <span className={`activity-icon ${item.tone}`}>
-                  {item.tone === "success" ? (
-                    <Check size={13} />
-                  ) : item.tone === "warning" ? (
-                    <Clock3 size={13} />
-                  ) : (
-                    <AlertCircle size={13} />
-                  )}
-                </span>
-                <span className="activity-copy">
-                  <strong>{item.title}</strong>
-                  <span>{item.detail}</span>
-                </span>
-                <span className="activity-time">{item.time}</span>
-              </button>
-            ))}
+            {data.activity.length === 0 ? (
+              <div className="empty-state" style={{ minHeight: 220 }}>
+                <div className="empty-state-inner">
+                  <SluiceMascot size={58} state="monitoring" />
+                  <h3>Sem atividade recente</h3>
+                  <p>Os próximos eventos e mudanças auditadas aparecerão aqui.</p>
+                </div>
+              </div>
+            ) : (
+              data.activity.map((item) => {
+                const job = item.jobId
+                  ? data.jobs.find((candidate) => candidate.id === item.jobId)
+                  : undefined;
+                return (
+                  <button
+                    key={item.id}
+                    className="activity-item"
+                    style={{
+                      width: "100%",
+                      borderTop: 0,
+                      borderLeft: 0,
+                      borderRight: 0,
+                      cursor: job ? "pointer" : "default",
+                      textAlign: "left",
+                      background: "transparent"
+                    }}
+                    disabled={!job}
+                    onClick={() => job && onSelectJob(job)}
+                  >
+                    <span className={`activity-icon ${item.tone}`}>
+                      {item.tone === "success" ? (
+                        <Check size={13} />
+                      ) : item.tone === "warning" ? (
+                        <Clock3 size={13} />
+                      ) : (
+                        <AlertCircle size={13} />
+                      )}
+                    </span>
+                    <span className="activity-copy">
+                      <strong>{item.title}</strong>
+                      <span>{item.detail}</span>
+                    </span>
+                    <span className="activity-time">{item.time}</span>
+                  </button>
+                );
+              })
+            )}
           </div>
         </section>
       </div>
@@ -381,25 +385,33 @@ function Overview({
           <SluiceMascot size={42} state="monitoring" />
         </div>
         <div className="system-strip-copy">
-          <h3>Tudo sob controle.</h3>
+          <h3>
+            {data.operational.services.every((service) => service.status === "healthy")
+              ? "Serviços operacionais disponíveis."
+              : "Atenção a um ou mais serviços."}
+          </h3>
           <p>
-            Fila saudável, cron executando e purge dentro da janela de
-            conformidade. Sluice está monitorando seus dados em tempo real.
+            {data.operational.deadLetters > 0
+              ? `${data.operational.deadLetters} job(s) em dead-letter requerem acompanhamento.`
+              : "Nenhum job em dead-letter neste workspace."}
           </p>
         </div>
         <div className="system-tags">
-          <span className="system-tag">
-            <i /> PostgreSQL
-          </span>
-          <span className="system-tag">
-            <i /> Redis
-          </span>
-          <span className="system-tag">
-            <i /> pg_cron
-          </span>
-          <span className="system-tag">
-            <i /> 3 workers
-          </span>
+          {data.operational.services.map((service) => (
+            <span className="system-tag" key={service.id} title={service.detail}>
+              <i
+                style={{
+                  background:
+                    service.status === "healthy"
+                      ? "#16a36a"
+                      : service.status === "degraded"
+                        ? "#ff6b00"
+                        : "#d92d20"
+                }}
+              />
+              {service.label}
+            </span>
+          ))}
         </div>
       </section>
     </>
@@ -496,7 +508,7 @@ function JobsTable({
               <th>Tentativas</th>
               <th>Disponível</th>
               <th>Prioridade</th>
-              <th>Duração</th>
+              <th>Duração da tentativa</th>
               <th aria-label="Ações" />
             </tr>
           </thead>
@@ -534,14 +546,7 @@ function JobsTable({
                   </span>
                 </td>
                 <td className="mono">{job.duration}</td>
-                <td>
-                  <button
-                    className="table-action"
-                    aria-label={`Detalhes do job ${job.id}`}
-                  >
-                    <MoreHorizontal size={14} />
-                  </button>
-                </td>
+                <td aria-label={`Detalhes do job ${job.id}`} />
               </tr>
             ))}
           </tbody>
@@ -602,13 +607,13 @@ function EventsTable({
         setSearch={setSearch}
         status={status}
         setStatus={setStatus}
-        statuses={["accepted", "duplicate", "quarantined"]}
+        statuses={["accepted", "quarantined"]}
       />
       <div className="table-wrap">
         <table className="data-table">
           <thead>
             <tr>
-              <th>Evento externo</th>
+              <th>Identificador externo (hash)</th>
               <th>Provedor</th>
               <th>Tenant / fonte</th>
               <th>Tipo</th>
@@ -653,17 +658,8 @@ function Pagination({ count }: { count: number }) {
   return (
     <div className="pagination">
       <span>
-        Exibindo {count} {count === 1 ? "registro" : "registros"}
+        Exibindo {count} {count === 1 ? "registro" : "registros"} desta consulta
       </span>
-      <div className="pagination-buttons">
-        <button aria-label="Página anterior">
-          <ChevronLeft size={12} />
-        </button>
-        <button className="active">1</button>
-        <button aria-label="Próxima página">
-          <ChevronRight size={12} />
-        </button>
-      </div>
     </div>
   );
 }
@@ -695,12 +691,14 @@ function EntityCards({
   section,
   data,
   onCreate,
-  onToggle
+  onToggle,
+  onToggleReconciliation
 }: {
   section: "sources" | "destinations" | "pipelines";
   data: DashboardPayload;
   onCreate: () => void;
   onToggle: (entity: Source | Destination | Pipeline) => void;
+  onToggleReconciliation: (source: Source) => void;
 }) {
   const entities =
     section === "sources"
@@ -754,9 +752,9 @@ function EntityCards({
               : (entity as Pipeline).source;
         const second =
           section === "sources"
-            ? (entity as Source).events24h
+            ? (entity as Source).successRate
             : section === "destinations"
-              ? (entity as Destination).deliveries24h
+              ? (entity as Destination).latency
               : (entity as Pipeline).throughput;
 
         return (
@@ -767,6 +765,16 @@ function EntityCards({
               </span>
               <div style={{ display: "flex", gap: 6 }}>
                 <Badge status={status} />
+                {section === "sources" && (
+                  <button
+                    className="table-action"
+                    aria-label={`${(entity as Source).reconciliationEnabled ? "Desativar" : "Ativar"} reconciliação de ${title}`}
+                    title={`${(entity as Source).reconciliationEnabled ? "Desativar" : "Ativar"} reconciliação`}
+                    onClick={() => onToggleReconciliation(entity as Source)}
+                  >
+                    <RefreshCw size={13} />
+                  </button>
+                )}
                 <button
                   className="table-action"
                   aria-label={`${status === "active" ? "Pausar" : "Ativar"} ${title}`}
@@ -788,7 +796,11 @@ function EntityCards({
                 <strong>{first}</strong>
               </span>
               <span>
-                {section === "pipelines" ? "Throughput" : "Últimas 24h"}
+                {section === "sources"
+                  ? "Sucesso 24h"
+                  : section === "destinations"
+                    ? "Latência p95"
+                    : "Eventos da fonte 24h"}
                 <strong>{second}</strong>
               </span>
             </div>
@@ -821,9 +833,9 @@ function WorkersView({ workers }: { workers: DashboardPayload["workers"] }) {
               <span className="worker-name-icon">
                 <ServerCog size={16} />
               </span>
-              <span>
-                <strong>{worker.id}</strong>
-                <span>{worker.region}</span>
+              <span className="worker-name-copy">
+                <strong title={worker.id}>{worker.id}</strong>
+                <span className="worker-region" title={worker.region}>{worker.region}</span>
               </span>
             </div>
             <Badge status={worker.status} />
@@ -840,12 +852,11 @@ function WorkersView({ workers }: { workers: DashboardPayload["workers"] }) {
               <strong>{worker.processed}</strong>
             </div>
             <div className="worker-stat">
-              <span>Uptime</span>
-              <strong>{worker.uptime}</strong>
+              <span>Última atividade</span>
+              <strong title={worker.lastSeenAt ?? worker.uptime}>
+                {worker.lastSeenAt ?? worker.uptime}
+              </strong>
             </div>
-          </div>
-          <div className="progress" title={`CPU ${worker.cpu}%`}>
-            <i style={{ width: `${Math.max(worker.cpu, 4)}%` }} />
           </div>
         </article>
       ))}
@@ -862,12 +873,10 @@ function TenantsView({ data }: { data: DashboardPayload }) {
             <tr>
               <th>Tenant</th>
               <th>Status</th>
-              <th>Plano</th>
               <th>Retenção</th>
               <th>Eventos no mês</th>
               <th>Membros</th>
               <th>Isolamento</th>
-              <th aria-label="Ações" />
             </tr>
           </thead>
           <tbody>
@@ -880,7 +889,6 @@ function TenantsView({ data }: { data: DashboardPayload }) {
                 <td>
                   <Badge status={tenant.status} />
                 </td>
-                <td>{tenant.plan}</td>
                 <td>{tenant.retentionDays} dias</td>
                 <td className="mono">{tenant.eventsMonth}</td>
                 <td>{tenant.members}</td>
@@ -888,11 +896,6 @@ function TenantsView({ data }: { data: DashboardPayload }) {
                   <span className="system-tag">
                     <Shield size={10} /> RLS ativo
                   </span>
-                </td>
-                <td>
-                  <button className="table-action" aria-label="Opções do tenant">
-                    <MoreHorizontal size={14} />
-                  </button>
                 </td>
               </tr>
             ))}
@@ -905,6 +908,23 @@ function TenantsView({ data }: { data: DashboardPayload }) {
 }
 
 function MetricsView({ data }: { data: DashboardPayload }) {
+  const distribution = data.jobDistribution;
+  const total = Math.max(distribution.total, 1);
+  const completed = (distribution.completed / total) * 100;
+  const processing = (distribution.processing / total) * 100;
+  const retry = (distribution.retry / total) * 100;
+  const deadLetter = (distribution.deadLetter / total) * 100;
+  const pending = Math.max(0, 100 - completed - processing - retry - deadLetter);
+  const donutStyle = {
+    background: `conic-gradient(
+      #16a36a 0 ${completed}%,
+      #2970ff ${completed}% ${completed + processing}%,
+      #ff6b00 ${completed + processing}% ${completed + processing + retry}%,
+      #d92d20 ${completed + processing + retry}% ${completed + processing + retry + deadLetter}%,
+      #64748b ${completed + processing + retry + deadLetter}% ${completed + processing + retry + deadLetter + pending}%
+    )`
+  };
+  const format = new Intl.NumberFormat("pt-BR");
   return (
     <>
       <StatCards data={data} />
@@ -917,7 +937,6 @@ function MetricsView({ data }: { data: DashboardPayload }) {
                 Volume autenticado por hora
               </span>
             </div>
-            <Badge status="active" />
           </div>
           <div className="panel-body">
             <AreaChart values={data.chart} />
@@ -931,24 +950,32 @@ function MetricsView({ data }: { data: DashboardPayload }) {
             </div>
           </div>
           <div className="panel-body donut-wrap">
-            <div className="donut">
+            <div className="donut" style={donutStyle}>
               <div className="donut-center">
-                <strong>1,2M</strong>
+                <strong>{format.format(distribution.total)}</strong>
                 <span>Total</span>
               </div>
             </div>
             <div className="chart-legend" style={{ flexWrap: "wrap", justifyContent: "center" }}>
               <span>
                 <i className="legend-line" style={{ background: "#16a36a" }} />{" "}
-                Concluídos 72,5%
+                Concluídos {format.format(distribution.completed)}
               </span>
               <span>
                 <i className="legend-line" style={{ background: "#2970ff" }} />{" "}
-                Processando 12,4%
+                Processando {format.format(distribution.processing)}
+              </span>
+              <span>
+                <i className="legend-line" style={{ background: "#ff6b00" }} />{" "}
+                Retry {format.format(distribution.retry)}
               </span>
               <span>
                 <i className="legend-line" style={{ background: "#d92d20" }} />{" "}
-                DLQ 1,9%
+                DLQ {format.format(distribution.deadLetter)}
+              </span>
+              <span>
+                <i className="legend-line" style={{ background: "#64748b" }} />{" "}
+                Pendentes {format.format(distribution.pending)}
               </span>
             </div>
           </div>
@@ -958,92 +985,127 @@ function MetricsView({ data }: { data: DashboardPayload }) {
   );
 }
 
-function SettingsView() {
-  const [toggles, setToggles] = useState({
-    notifications: true,
-    weekly: true,
-    anomaly: true,
-    verbose: false
-  });
+function SettingsView({
+  data,
+  onRefresh,
+  refreshing
+}: {
+  data: DashboardPayload;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  const { settings } = data;
   const cards = [
     {
-      title: "Segurança",
-      description: "Sessões, segredos e controle de acesso.",
+      title: "Segurança da conta",
+      description: "Estado observado; autenticação é administrada pela identidade da instância.",
       icon: LockKeyhole,
       rows: [
-        ["MFA obrigatório", "Exigir segundo fator para administradores", "notifications"],
-        ["Alertas de anomalia", "Mudanças de segredo e falhas de assinatura", "anomaly"]
-      ]
-    },
-    {
-      title: "Notificações",
-      description: "Alertas ativos e relatórios operacionais.",
-      icon: ShieldAlert,
-      rows: [
-        ["Dead-letter imediato", "Notificar em todos os canais configurados", "notifications"],
-        ["Resumo semanal", "Saúde, volume e conformidade", "weekly"]
+        ["OIDC", settings.security.oidcConfigured ? "Configurado" : "Não configurado"],
+        [
+          "MFA da conta",
+          settings.security.accountMfaEnabled ? "Ativado" : "Não ativado"
+        ],
+        ["Duração da sessão", `${settings.security.sessionHours} horas`]
       ]
     },
     {
       title: "Retenção LGPD",
-      description: "Prazo obrigatório para dados brutos.",
+      description: "Políticas efetivas do tenant, aplicadas ao payload bruto cifrado.",
       icon: FileClock,
       rows: [
-        ["Janela padrão", "90 dias · mínimo operacional 7 dias", null],
-        ["Último purge", "26 jul 2026, 15:30 · 1.842 payloads", null]
+        ["Payload bruto", `${settings.retention.rawPayloadDays} dias`],
+        ["Metadados de deduplicação", `${settings.retention.dedupeMetadataDays} dias`],
+        [
+          "Próximo payload elegível",
+          settings.retention.nextPurgeAt ?? "Nenhum payload pendente"
+        ],
+        [
+          "Purge nas últimas 24h",
+          `${settings.retention.payloadsPurged24h} payload(s)`
+        ]
       ]
     },
     {
-      title: "Observabilidade",
-      description: "Logs, métricas e auditoria append-only.",
+      title: "Notificações operacionais",
+      description: "Estado real da fila de notificações; não há preferências locais simuladas.",
+      icon: ShieldAlert,
+      rows: (["pending", "processing", "sent24h", "failed"] as const).map((key) => {
+        const labels = {
+          pending: "Pendentes",
+          processing: "Em processamento",
+          sent24h: "Enviadas nas últimas 24h",
+          failed: "Falhas para revisar"
+        } as const;
+        return [labels[key], String(settings.notifications[key])];
+      })
+    },
+    {
+      title: "Auditoria e reconciliação",
+      description: "Indicadores reais do banco. A reconciliação é ativada por fonte.",
       icon: Activity,
       rows: [
-        ["Logs detalhados", "Nunca inclui payload ou segredo", "verbose"],
-        ["Auditoria de estado", "Trigger append-only ativo", "notifications"]
+        ["Registros de auditoria em 24h", String(settings.audit.records24h)],
+        [
+          "Fontes com reconciliação",
+          `${settings.reconciliation.enabledSources} de ${settings.reconciliation.totalSources}`
+        ],
+        [
+          "Falhas de reconciliação",
+          String(settings.reconciliation.sourcesWithError)
+        ],
+        [
+          "Último sucesso de reconciliação",
+          settings.reconciliation.lastSuccessAt ?? "Sem execução concluída"
+        ]
       ]
     }
-  ] as const;
+  ];
 
   return (
-    <div className="grid settings-grid">
-      {cards.map((card) => {
-        const Icon = card.icon;
-        return (
-          <section className="settings-card" key={card.title}>
-            <div className="settings-card-head">
-              <Icon size={18} />
-              <div>
-                <h3>{card.title}</h3>
-                <p>{card.description}</p>
-              </div>
-            </div>
-            {card.rows.map(([title, description, key]) => (
-              <div className="setting-row" key={title}>
-                <div className="setting-row-copy">
-                  <strong>{title}</strong>
-                  <span>{description}</span>
+    <>
+      <div className="grid settings-grid">
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <section className="settings-card" key={card.title}>
+              <div className="settings-card-head">
+                <Icon size={18} />
+                <div>
+                  <h3>{card.title}</h3>
+                  <p>{card.description}</p>
                 </div>
-                {key ? (
-                  <button
-                    className={`toggle ${toggles[key] ? "on" : ""}`}
-                    aria-label={`${toggles[key] ? "Desativar" : "Ativar"} ${title}`}
-                    aria-pressed={toggles[key]}
-                    onClick={() =>
-                      setToggles((current) => ({
-                        ...current,
-                        [key]: !current[key]
-                      }))
-                    }
-                  />
-                ) : (
-                  <CheckCircle2 size={15} className="trend-up" />
-                )}
               </div>
-            ))}
-          </section>
-        );
-      })}
-    </div>
+              {card.rows.map(([title, value]) => (
+                <div className="setting-row" key={title}>
+                  <div className="setting-row-copy">
+                    <strong>{title}</strong>
+                    <span>{value}</span>
+                  </div>
+                  <span className="mono" style={{ color: "var(--text-secondary)", fontSize: 10 }}>
+                    leitura
+                  </span>
+                </div>
+              ))}
+            </section>
+          );
+        })}
+      </div>
+      <section className="panel" style={{ marginTop: 15 }}>
+        <div className="panel-body" style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
+          <div>
+            <h2 style={{ margin: 0 }}>Estado lido do sistema</h2>
+            <p className="panel-subtitle" style={{ marginTop: 5 }}>
+              Apenas controles conectados a uma política persistida aparecem como ações nas telas de Fontes, Destinos e Pipelines.
+            </p>
+          </div>
+          <button className="button" onClick={onRefresh} disabled={refreshing}>
+            <RefreshCw size={14} style={{ animation: refreshing ? "spin 1s linear infinite" : undefined }} />
+            {refreshing ? "Atualizando…" : "Atualizar estado"}
+          </button>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -1107,7 +1169,7 @@ function JobDrawer({
                 <code>{job.tenantId}</code>
               </div>
               <div className="detail">
-                <span>Evento externo</span>
+                <span>Identificador externo (hash)</span>
                 <code>{job.externalEventId}</code>
               </div>
               <div className="detail">
@@ -1155,8 +1217,8 @@ function JobDrawer({
                 <div className="timeline-item">
                   <i className="timeline-dot" />
                   <div className="timeline-copy">
-                    <strong>Efeito confirmado</strong>
-                    <span>Ledger idempotente registrado</span>
+                    <strong>Job concluído</strong>
+                    <span>O efeito de destino, quando aplicável, é idempotente.</span>
                   </div>
                   <span className="timeline-time">concluído</span>
                 </div>
@@ -1350,6 +1412,18 @@ function CreateModal({
                 Segredo de autenticação
                 <input name="secret" type="password" required minLength={16} />
               </label>
+              <label className="modal-note" style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+                <input
+                  name="reconciliationEnabled"
+                  type="checkbox"
+                  value="true"
+                  style={{ width: "auto", marginTop: 2 }}
+                />
+                <span>
+                  Ativar reconciliação para esta fonte. Habilite somente se o endpoint
+                  do provedor já estiver configurado no worker.
+                </span>
+              </label>
               {sourceProvider === "pix" && (
                 <>
                   <div className="modal-note">
@@ -1484,6 +1558,61 @@ function CreateModal({
 }
 
 type Toast = { id: number; message: string; error?: boolean };
+type ActionResult = { message?: string; webhookUrl?: string };
+
+function WebhookUrlModal({
+  url,
+  onClose
+}: {
+  url: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <p className="page-kicker" style={{ marginBottom: 4 }}>
+              Fonte criada
+            </p>
+            <h2>URL do webhook</h2>
+          </div>
+          <button className="icon-button" type="button" onClick={onClose}>
+            <X size={16} />
+          </button>
+        </div>
+        <div className="modal-body">
+          <p className="modal-note">
+            Copie esta URL agora. A chave é mascarada na listagem por segurança.
+          </p>
+          <label>
+            Endpoint público
+            <input value={url} readOnly aria-label="Endpoint público do webhook" />
+          </label>
+        </div>
+        <div className="modal-foot">
+          <button className="button" type="button" onClick={onClose}>
+            Fechar
+          </button>
+          <button className="button button-primary" type="button" onClick={() => void copyUrl()}>
+            <Copy size={14} /> {copied ? "Copiado" : "Copiar URL"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
 
 export function SectionPage({ section }: { section: Section }) {
   const searchParams = useSearchParams();
@@ -1496,9 +1625,11 @@ export function SectionPage({ section }: { section: Section }) {
   const [modal, setModal] = useState<
     "sources" | "destinations" | "pipelines" | "tenants" | null
   >(null);
+  const [createdWebhookUrl, setCreatedWebhookUrl] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const tenant = searchParams.get("tenant") ?? "all";
+  const globalQuery = (searchParams.get("q") ?? "").trim().toLowerCase();
 
   const addToast = useCallback((message: string, toastError = false) => {
     const id = Date.now();
@@ -1519,12 +1650,30 @@ export function SectionPage({ section }: { section: Section }) {
         const response = await fetch(`/api/dashboard${query}`, {
           cache: "no-store"
         });
-        if (!response.ok) throw new Error(`dashboard ${response.status}`);
+        if (response.status === 401) {
+          window.location.assign("/login");
+          return;
+        }
+        if (response.status === 403) {
+          throw new Error(
+            "Você não tem acesso ao tenant selecionado. Selecione outro workspace."
+          );
+        }
+        if (response.status === 503) {
+          throw new Error(
+            "Os dados operacionais estão indisponíveis. Tente novamente em instantes."
+          );
+        }
+        if (!response.ok) {
+          throw new Error("Não foi possível carregar a operação.");
+        }
         const payload = (await response.json()) as DashboardPayload;
         setData(payload);
-      } catch {
+      } catch (loadError) {
         setError(
-          "Não foi possível carregar a operação. Verifique o dashboard e o PostgreSQL."
+          loadError instanceof Error
+            ? loadError.message
+            : "Não foi possível carregar a operação."
         );
       } finally {
         setLoading(false);
@@ -1538,10 +1687,52 @@ export function SectionPage({ section }: { section: Section }) {
     void load();
   }, [load]);
 
+  const visibleData = useMemo(() => {
+    if (!data || !globalQuery) return data;
+    const matches = (...values: Array<string | number | undefined>) =>
+      values.join(" ").toLowerCase().includes(globalQuery);
+    return {
+      ...data,
+      activity: data.activity.filter((item) => matches(item.title, item.detail)),
+      jobs: data.jobs.filter((job) =>
+        matches(job.id, job.tenant, job.type, job.source, job.externalEventId)
+      ),
+      events: data.events.filter((event) =>
+        matches(
+          event.id,
+          event.externalId,
+          event.provider,
+          event.source,
+          event.tenant,
+          event.eventType
+        )
+      ),
+      sources: data.sources.filter((source) =>
+        matches(source.name, source.provider, source.description, source.endpointKey)
+      ),
+      destinations: data.destinations.filter((destination) =>
+        matches(destination.name, destination.kind, destination.host, destination.description)
+      ),
+      pipelines: data.pipelines.filter((pipeline) =>
+        matches(
+          pipeline.name,
+          pipeline.source,
+          pipeline.destination,
+          pipeline.description
+        )
+      ),
+      workers: data.workers.filter((worker) =>
+        matches(worker.id, worker.region, worker.lastSeenAt, worker.uptime)
+      ),
+      tenants: data.tenants.filter((item) => matches(item.name, item.slug))
+    };
+  }, [data, globalQuery]);
+
   async function action(
     name: string,
     input: Record<string, unknown>,
-    successMessage: string
+    successMessage: string,
+    onSuccess?: (result: ActionResult) => void
   ) {
     try {
       const response = await fetch("/api/actions", {
@@ -1549,8 +1740,9 @@ export function SectionPage({ section }: { section: Section }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: name, ...input })
       });
-      const result = (await response.json()) as { message?: string };
+      const result = (await response.json()) as ActionResult;
       if (!response.ok) throw new Error(result.message ?? "action failed");
+      onSuccess?.(result);
       addToast(successMessage);
       await load(true);
       return true;
@@ -1564,6 +1756,62 @@ export function SectionPage({ section }: { section: Section }) {
       return false;
     }
   }
+
+  const exportSection = useCallback(() => {
+    if (!visibleData) return;
+    const sectionData: Record<Section, unknown> = {
+      overview: {
+        stats: visibleData.stats,
+        chart: visibleData.chart,
+        activity: visibleData.activity,
+        operational: visibleData.operational
+      },
+      events: visibleData.events,
+      jobs: visibleData.jobs,
+      workers: visibleData.workers,
+      "dead-letter": visibleData.jobs.filter((job) => job.status === "dead-letter"),
+      tenants: visibleData.tenants,
+      metrics: {
+        stats: visibleData.stats,
+        chart: visibleData.chart,
+        jobDistribution: visibleData.jobDistribution
+      },
+      sources: visibleData.sources,
+      destinations: visibleData.destinations,
+      pipelines: visibleData.pipelines,
+      settings: {
+        settings: visibleData.settings,
+        operational: visibleData.operational
+      }
+    };
+    try {
+      const blob = new Blob(
+        [
+          JSON.stringify(
+            {
+              exportedAt: new Date().toISOString(),
+              tenant: visibleData.tenant,
+              section,
+              query: globalQuery || undefined,
+              data: sectionData[section]
+            },
+            null,
+            2
+          )
+        ],
+        { type: "application/json" }
+      );
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `sluice-${section}-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      addToast("Exportação JSON iniciada com os dados visíveis.");
+    } catch {
+      addToast("Não foi possível gerar a exportação.", true);
+    }
+  }, [addToast, globalQuery, section, visibleData]);
 
   const titleActions = useMemo(() => {
     if (["sources", "destinations", "pipelines"].includes(section)) {
@@ -1592,14 +1840,14 @@ export function SectionPage({ section }: { section: Section }) {
     }
     if (section === "dead-letter") {
       return (
-        <button className="button button-danger">
-          <ShieldAlert size={14} /> Política de alerta ativa
-        </button>
+        <span className="system-tag" title="Contagem atual de jobs com falha terminal">
+          <ShieldAlert size={13} /> {data?.operational.deadLetters ?? 0} em dead-letter
+        </span>
       );
     }
     return (
       <>
-        <button className="button">
+        <button className="button" onClick={exportSection}>
           <Download size={14} /> Exportar
         </button>
         <button
@@ -1615,7 +1863,7 @@ export function SectionPage({ section }: { section: Section }) {
         </button>
       </>
     );
-  }, [section, refreshing, load]);
+  }, [data?.operational.deadLetters, exportSection, load, refreshing, section]);
 
   if (loading) {
     return (
@@ -1649,31 +1897,38 @@ export function SectionPage({ section }: { section: Section }) {
     );
   }
 
+  const displayedData = visibleData ?? data;
+
   return (
     <div className="content">
       <PageHeader section={section}>{titleActions}</PageHeader>
+      {globalQuery && (
+        <p className="panel-subtitle" style={{ margin: "-4px 0 14px" }}>
+          Filtro global ativo: “{searchParams.get("q")}”. A exportação inclui somente os dados visíveis.
+        </p>
+      )}
 
       {section === "overview" && (
-        <Overview data={data} onSelectJob={setSelectedJob} />
+        <Overview data={displayedData} onSelectJob={setSelectedJob} />
       )}
       {section === "jobs" && (
-        <JobsTable jobs={data.jobs} onSelect={setSelectedJob} />
+        <JobsTable jobs={displayedData.jobs} onSelect={setSelectedJob} />
       )}
       {section === "dead-letter" && (
-        <JobsTable jobs={data.jobs} onSelect={setSelectedJob} deadOnly />
+        <JobsTable jobs={displayedData.jobs} onSelect={setSelectedJob} deadOnly />
       )}
       {section === "events" && (
-        <EventsTable events={data.events} onSelect={setSelectedEvent} />
+        <EventsTable events={displayedData.events} onSelect={setSelectedEvent} />
       )}
-      {section === "workers" && <WorkersView workers={data.workers} />}
-      {section === "tenants" && <TenantsView data={data} />}
-      {section === "metrics" && <MetricsView data={data} />}
+      {section === "workers" && <WorkersView workers={displayedData.workers} />}
+      {section === "tenants" && <TenantsView data={displayedData} />}
+      {section === "metrics" && <MetricsView data={displayedData} />}
       {(section === "sources" ||
         section === "destinations" ||
         section === "pipelines") && (
         <EntityCards
           section={section}
-          data={data}
+          data={displayedData}
           onCreate={() => setModal(section)}
           onToggle={(entity) =>
             void action(
@@ -1686,9 +1941,31 @@ export function SectionPage({ section }: { section: Section }) {
               `${entity.status === "active" ? "Recurso pausado" : "Recurso ativado"} com auditoria.`
             )
           }
+          onToggleReconciliation={(source) => {
+            const nextEnabled = !source.reconciliationEnabled;
+            if (
+              nextEnabled &&
+              !window.confirm(
+                "Ative somente se o endpoint de reconciliação deste provedor estiver configurado no worker. Continuar?"
+              )
+            ) {
+              return;
+            }
+            void action(
+              "toggle_source_reconciliation",
+              { id: source.id, active: nextEnabled },
+              `Reconciliação ${nextEnabled ? "ativada" : "desativada"} com auditoria.`
+            );
+          }}
         />
       )}
-      {section === "settings" && <SettingsView />}
+      {section === "settings" && (
+        <SettingsView
+          data={displayedData}
+          onRefresh={() => void load(true)}
+          refreshing={refreshing}
+        />
+      )}
 
       {selectedJob && (
         <JobDrawer
@@ -1722,10 +1999,21 @@ export function SectionPage({ section }: { section: Section }) {
             const ok = await action(
               "create_resource",
               { resource: modal, input },
-              "Recurso criado e registrado na auditoria."
+              "Recurso criado e registrado na auditoria.",
+              (result) => {
+                if (modal === "sources" && result.webhookUrl) {
+                  setCreatedWebhookUrl(result.webhookUrl);
+                }
+              }
             );
             if (ok) setModal(null);
           }}
+        />
+      )}
+      {createdWebhookUrl && (
+        <WebhookUrlModal
+          url={createdWebhookUrl}
+          onClose={() => setCreatedWebhookUrl(null)}
         />
       )}
       <div className="toast-stack" aria-live="polite">

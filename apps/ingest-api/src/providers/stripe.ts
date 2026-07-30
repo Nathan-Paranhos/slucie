@@ -21,7 +21,7 @@ const stripeEventSchema = z
     object: z.literal("event"),
     type: z.string().min(1),
     created: z.number().int().positive(),
-    data: z.object({ object: z.record(z.unknown()) }).passthrough()
+    data: z.object({ object: z.record(z.string(), z.unknown()) }).passthrough()
   })
   .passthrough();
 

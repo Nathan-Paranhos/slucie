@@ -24,7 +24,7 @@ async function availablePort() {
 }
 
 async function waitUntilReady(baseUrl, process, output) {
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  for (let attempt = 0; attempt < 160; attempt += 1) {
     if (process.exitCode !== null) {
       throw new Error(`Dashboard exited before readiness.\n${output.join("")}`);
     }
@@ -45,14 +45,21 @@ test("demo login, protected console, and mutations work end to end", async (t) =
   const output = [];
   const server = spawn(
     process.execPath,
-    [path.join(dashboardRoot, ".next", "standalone", "server.js")],
+    [
+      path.join(dashboardRoot, "node_modules", "next", "dist", "bin", "next"),
+      "dev",
+      "-H",
+      "127.0.0.1",
+      "-p",
+      String(port)
+    ],
     {
       cwd: dashboardRoot,
       env: {
         ...process.env,
         HOSTNAME: "127.0.0.1",
         PORT: String(port),
-        NODE_ENV: "production",
+        NODE_ENV: "development",
         SLUICE_DEMO_MODE: "true",
         SLUICE_DEMO_EMAIL: "admin@sluice.local",
         SLUICE_DEMO_PASSWORD: "sluice-demo",
@@ -127,12 +134,30 @@ test("demo login, protected console, and mutations work end to end", async (t) =
   assert.ok(snapshot.stats.length >= 4);
   assert.ok(Array.isArray(snapshot.jobs));
   assert.ok(Array.isArray(snapshot.events));
+  assert.equal(snapshot.operational.services.length, 3);
+  assert.equal(typeof snapshot.operational.deadLetters, "number");
+  assert.equal(typeof snapshot.settings.retention.rawPayloadDays, "number");
+  assert.equal(typeof snapshot.jobDistribution.deadLetter, "number");
 
-  const consolePage = await fetch(`${baseUrl}/jobs`, {
-    headers: { cookie }
-  });
-  assert.equal(consolePage.status, 200);
-  assert.match(await consolePage.text(), /Sluice/);
+  for (const pagePath of [
+    "/",
+    "/events",
+    "/jobs",
+    "/workers",
+    "/dead-letter",
+    "/tenants",
+    "/metrics",
+    "/sources",
+    "/destinations",
+    "/pipelines",
+    "/settings"
+  ]) {
+    const consolePage = await fetch(`${baseUrl}${pagePath}`, {
+      headers: { cookie }
+    });
+    assert.equal(consolePage.status, 200, `Expected ${pagePath} to render`);
+    assert.match(await consolePage.text(), /Sluice/);
+  }
 
   const crossOriginAction = await fetch(`${baseUrl}/api/actions`, {
     method: "POST",
@@ -169,6 +194,23 @@ test("demo login, protected console, and mutations work end to end", async (t) =
     demo: true,
     message: "Ação simulada no modo de demonstração."
   });
+
+  const profile = await fetch(`${baseUrl}/api/actions`, {
+    method: "POST",
+    headers: {
+      cookie,
+      "content-type": "application/json",
+      origin: baseUrl
+    },
+    body: JSON.stringify({
+      action: "update_profile",
+      input: { name: "Administração de teste" }
+    })
+  });
+  assert.equal(profile.status, 200);
+  const profileBody = await profile.json();
+  assert.deepEqual(profileBody, { ok: true, demo: true });
+  assert.match(profile.headers.get("set-cookie") ?? "", /sluice_session=/);
 
   const logout = await fetch(`${baseUrl}/api/session/logout`, {
     method: "POST",

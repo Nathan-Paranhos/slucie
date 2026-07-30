@@ -9,7 +9,8 @@
     "start": "next start -p 3000",
     "lint": "oxlint --deny-warnings app components lib proxy.ts next.config.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test tests/*.test.mjs"
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "test:connected": "node --test tests/connected.e2e.mjs"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
@@ -26,7 +27,7 @@
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "oxlint": "1.75.0",
-    "typescript": "7.0.2"
+    "typescript": "5.7.2"
   },
   "overrides": {
     "postcss": "8.5.23",
