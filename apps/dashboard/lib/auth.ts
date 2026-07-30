@@ -100,8 +100,8 @@ export function isUsableSession(
 }
 
 export function isSecureSessionCookie() {
-  if (process.env.SLUICE_COOKIE_SECURE !== undefined) {
-    return process.env.SLUICE_COOKIE_SECURE === "true";
-  }
-  return process.env.NODE_ENV === "production";
+  // Production authentication is always HTTPS-only. An environment value can
+  // enable Secure cookies in development, but must never downgrade production.
+  if (process.env.NODE_ENV === "production") return true;
+  return process.env.SLUICE_COOKIE_SECURE === "true";
 }

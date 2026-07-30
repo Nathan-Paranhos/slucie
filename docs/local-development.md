@@ -95,7 +95,8 @@ curl http://localhost:8082/health/ready
 curl http://localhost:3000/api/health
 ```
 
-O overlay de desenvolvimento publica as portas no host. Não o use em produção.
+O overlay de desenvolvimento publica as portas somente em `127.0.0.1`. Não o
+use em produção.
 O dashboard inicia em modo conectado conforme `.env.example`; conclua o
 bootstrap do primeiro owner em [Modo conectado](#modo-conectado).
 
