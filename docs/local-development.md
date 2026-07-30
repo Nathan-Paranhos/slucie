@@ -95,8 +95,11 @@ curl http://localhost:8082/health/ready
 curl http://localhost:3000/api/health
 ```
 
-O overlay de desenvolvimento publica as portas somente em `127.0.0.1`. Não o
-use em produção.
+Por padrão, o overlay de desenvolvimento publica as portas somente em
+`127.0.0.1`. Para disponibilizar somente o dashboard na rede local, defina
+`SLUICE_DASHBOARD_BIND_ADDRESS=0.0.0.0` e recrie o serviço; API, banco, Redis e
+diagnóstico do worker continuam restritos à máquina. Não use o overlay em
+produção.
 O dashboard inicia em modo conectado conforme `.env.example`; conclua o
 bootstrap do primeiro owner em [Modo conectado](#modo-conectado).
 

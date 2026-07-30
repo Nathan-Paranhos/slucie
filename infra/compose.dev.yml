@@ -15,7 +15,7 @@ services:
     environment:
       SLUICE_RUNTIME_ENV: development
     ports:
-      - "127.0.0.1:${DASHBOARD_PORT:-3000}:3000"
+      - "${SLUICE_DASHBOARD_BIND_ADDRESS:-127.0.0.1}:${DASHBOARD_PORT:-3000}:3000"
 
   worker:
     ports:
