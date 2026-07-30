@@ -5,7 +5,8 @@ evidência correspondente não torna a instalação segura.
 
 ## Identidade: OIDC com MFA obrigatório
 
-O dashboard exige OIDC quando `NODE_ENV=production`. Configure um cliente
+O dashboard exige OIDC quando `SLUICE_RUNTIME_ENV=production` (o padrão em
+produção). Configure um cliente
 confidencial no provedor corporativo e registre exatamente:
 
 ```text
@@ -15,6 +16,7 @@ https://console.seu-dominio.com/api/session/oidc/callback
 Defina no secret manager (nunca no Git):
 
 ```text
+SLUICE_RUNTIME_ENV=production
 SLUICE_OIDC_ISSUER=https://id.seu-dominio.com
 SLUICE_OIDC_CLIENT_ID=...
 SLUICE_OIDC_CLIENT_SECRET=...

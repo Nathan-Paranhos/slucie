@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
+import { isProductionRuntime } from "./runtime";
 
 export const SESSION_COOKIE = "sluice_session";
 export const SESSION_DURATION_SECONDS = 60 * 60 * 8;
@@ -22,7 +23,7 @@ export type SessionIdentity = Pick<
 function sessionKey() {
   const raw = process.env.SLUICE_SESSION_SECRET;
   if (!raw || raw.length < 32) {
-    if (process.env.NODE_ENV === "production") {
+    if (isProductionRuntime()) {
       throw new Error("SLUICE_SESSION_SECRET must contain at least 32 characters");
     }
     return new TextEncoder().encode(
@@ -77,7 +78,7 @@ export async function verifySessionToken(
 }
 
 export function isDemoMode() {
-  if (process.env.NODE_ENV === "production") {
+  if (isProductionRuntime()) {
     return false;
   }
   if (process.env.SLUICE_DEMO_MODE !== undefined) {
@@ -102,6 +103,6 @@ export function isUsableSession(
 export function isSecureSessionCookie() {
   // Production authentication is always HTTPS-only. An environment value can
   // enable Secure cookies in development, but must never downgrade production.
-  if (process.env.NODE_ENV === "production") return true;
+  if (isProductionRuntime()) return true;
   return process.env.SLUICE_COOKIE_SECURE === "true";
 }

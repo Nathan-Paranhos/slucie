@@ -12,6 +12,8 @@ services:
       - "127.0.0.1:${INGEST_API_PORT:-3001}:8080"
 
   dashboard:
+    environment:
+      SLUICE_RUNTIME_ENV: development
     ports:
       - "127.0.0.1:${DASHBOARD_PORT:-3000}:3000"
 

@@ -124,6 +124,7 @@ services:
     init: true
     environment:
       NODE_ENV: ${NODE_ENV:-production}
+      SLUICE_RUNTIME_ENV: ${SLUICE_RUNTIME_ENV:-production}
       HOSTNAME: 0.0.0.0
       PORT: "3000"
       DATABASE_URL: ${SLUICE_DASHBOARD_DATABASE_URL:?Set SLUICE_DASHBOARD_DATABASE_URL}
