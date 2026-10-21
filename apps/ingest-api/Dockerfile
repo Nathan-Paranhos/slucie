@@ -1,4 +1,4 @@
-FROM node:26.5.0-alpine@sha256:e88a35be04478413b7c71c455cd9865de9b9360e1f43456be5951032d7ac1a66 AS build
+FROM node:26.12.0-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5 AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -13,7 +13,7 @@ RUN npm test && npm run lint && npm run typecheck
 FROM verification AS production-dependencies
 RUN npm prune --omit=dev
 
-FROM node:26.5.0-alpine@sha256:e88a35be04478413b7c71c455cd9865de9b9360e1f43456be5951032d7ac1a66 AS runtime
+FROM node:26.12.0-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5 AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN addgroup -S sluice && adduser -S -G sluice -u 10001 sluice
